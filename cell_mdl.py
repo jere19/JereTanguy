@@ -418,35 +418,35 @@ class IntGen():
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
-            s = mlab.surf(self.Vm[...,0])
+            s = mlab.surf(self.Vm[...,1])
             raw_input("Press Enter to lauch the simulation...")
-            for i in range(self.Vm.shape[-1]):
+            for i in range(1,self.Vm.shape[-1]):
                 s.mlab_source.scalars = self.Vm[...,i]
         elif self.Vm.ndim == 4:
-            p = mlab.pipeline.scalar_field(self.Vm[...,0])
+            p = mlab.pipeline.scalar_field(self.Vm[...,1])
             s = mlab.pipeline.image_plane_widget( p,
                                         plane_orientation='x_axes',
                                         slice_index=self.mdl.stimCoord[0],
-                                        vmin = self.Vm.min(),
-                                        vmax = self.Vm.max()
+                                        vmin = self.Vm[...,1:].min(),
+                                        vmax = self.Vm[...,1:].max()
                                     )
 
             s2 = mlab.pipeline.image_plane_widget(p,
                                         plane_orientation='y_axes',
                                         slice_index=self.mdl.stimCoord[2],
-                                        vmin = self.Vm.min(),
-                                        vmax = self.Vm.max()
+                                        vmin = self.Vm[...,1:].min(),
+                                        vmax = self.Vm[...,1:].max()
                                     )
             s3 = mlab.pipeline.image_plane_widget( p,
                                         plane_orientation='z_axes',
                                         slice_index=self.mdl.stimCoord[4],
-                                        vmin = self.Vm.min(),
-                                        vmax = self.Vm.max()
+                                        vmin = self.Vm[...,1:].min(),
+                                        vmax = self.Vm[...,1:].max()
                                     )
             mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
             mlab.outline(color=(1,1,1))
             raw_input("Press Enter to lauch the simulation...")
-            for i in range(self.Vm.shape[-1]):
+            for i in range(1,self.Vm.shape[-1]):
                 p.mlab_source.scalars = self.Vm[...,i]
  
 
