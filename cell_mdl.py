@@ -4,13 +4,24 @@ Red3: Uses reduced 3 vars uterine cell model (J.Laforet).
 Red6: Uses reduced 6 vars uterine cell model (S.Rihana)."""
 
 import numpy
-import pylab
-import matplotlib.cm as cm
+try :
+    import pylab
+except:
+    pass
+try :
+    import matplotlib.cm as cm
+except:
+    pass
 from scipy.ndimage.filters import correlate1d
-from IPython.parallel import Client
+try:
+    from IPython.parallel import Client
+except:
+    pass
 from warnings import warn
-from enthought.mayavi import mlab
-
+try :
+    from enthought.mayavi import mlab
+except:
+    pass
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -407,19 +418,19 @@ class IntGen():
         self.mdl = mdl
         
     def save(self,filename):
-        """save t and Vm using the method numpy.savez"""
+        """Saves t and Vm using the method numpy.savez"""
         logY=open(filename,'w')
         numpy.savez(logY,t=self.t,Y=self.Vm)
         logY.close()
 
     def show(self):
-        """show Vm in a graph. Works for 1D projects only"""
+        """Shows the evolution of Vm along time. Use makemovie.py to generate a video."""
         if self.Vm.ndim == 2:
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
             s = mlab.surf(self.Vm[...,0])
-            raw_input("Press Enter to lauch the simulation...")
+            raw_input("Press Enter to lauch the animation...")
             for i in range(self.Vm.shape[-1]):
                 s.mlab_source.scalars = self.Vm[...,i]
         elif self.Vm.ndim == 4:
@@ -445,7 +456,7 @@ class IntGen():
                                     )
             mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
             mlab.outline(color=(1,1,1))
-            raw_input("Press Enter to lauch the simulation...")
+            raw_input("Press Enter to lauch the animation...")
             for i in range(self.Vm.shape[-1]):
                 p.mlab_source.scalars = self.Vm[...,i]
  
