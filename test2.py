@@ -48,6 +48,47 @@ tmdl.compute(tmax=5,stimCoord=stimCoord)
 print('\a')
 raw_input("Press Enter to continue...")
 
-tmdl.show()
+v = tmdl.Vm
+p = mlab.pipeline.scalar_field(v[...,1])
+s = mlab.pipeline.image_plane_widget( p,
+                            plane_orientation='x_axes',
+                            slice_index=29,
+                            vmin = v.min(),
+                            vmax = v.max()
+                        )
+
+s2 = mlab.pipeline.image_plane_widget(p,
+                            plane_orientation='y_axes',
+                            slice_index=round(Ny*2./10)+1,
+                            vmin = v.min(),
+                            vmax = v.max()
+                        )
+s = mlab.pipeline.image_plane_widget( p,
+                            plane_orientation='z_axes',
+                            slice_index=2,
+                            vmin = v.min(),
+                            vmax = v.max()
+                        )
+
+mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
+mlab.outline(color=(1,1,1))
+
+##pour animation
+for i in range(2,v.shape[-1]):
+    p.mlab_source.scalars = v[...,i]
+    
 mlab.show()
+
+#logY=open('save.npz','w')
+#numpy.savez(logY,t=t,v=v)
+#logY.close()
+
+import matplotlib.pyplot as plt 
+from time import sleep 
+fig1 = plt.figure(1)
+ax1 = fig1.gca()
+for i in range(integ2d.Vm.shape[-1]):
+     plt.imshow(integ2d.Vm[...,i], axes=ax1, animated=True)
+     sleep(0.5)
+
 
