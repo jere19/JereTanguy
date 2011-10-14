@@ -414,6 +414,8 @@ class IntGen():
 
     def show(self):
         """show Vm in a graph. Works for 1D projects only"""
+        assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
+
         if self.Vm.ndim == 2:
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
