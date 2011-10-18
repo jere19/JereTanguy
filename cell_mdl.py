@@ -461,6 +461,9 @@ class IntSerial(IntGen):
         """
         IntGen.__init__(self,mdl)
 
+    def _stim0(self,stimCoord,Ist):
+        pass
+    
     def _stim1(self,stimCoord,Ist):
         self.mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
 
@@ -494,7 +497,12 @@ class IntSerial(IntGen):
         else:
             self.mdl.stimCoord2 = stimCoord2
 
-        if self.mdl.Y.ndim == 2:
+        flag0D = False
+        if self.mdl.Y.ndim == 1:
+            self.Vm = numpy.empty(len(self.t))
+            self.stim = self._stim0
+            flag0D = True
+        elif self.mdl.Y.ndim == 2:
             self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
             self.stim = self._stim1
         elif self.mdl.Y.ndim == 3:
@@ -504,7 +512,7 @@ class IntSerial(IntGen):
             self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,len(self.t)))
             self.stim = self._stim3
 
-        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+        assert flag0D or ((self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2)),"stimCoord and/or stimCoord2 have incorrect dimensions"
 
         #Integration
         while self.mdl.time<tmax:

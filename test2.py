@@ -42,7 +42,7 @@ stimCoord = [round(Nx*5./10),round(Nx*6./10),round(Ny*2./10),round(Ny*8./10),pdg
 tmdl = cell_mdl.IntPara(model)
 #tmdl = cell_mdl.IntSerial(model)
 ############################################
-tmdl.compute(tmax=5,stimCoord=stimCoord)
+tmdl.compute(tmax=1000,stimCoord=stimCoord)
 ############################################
 
 
