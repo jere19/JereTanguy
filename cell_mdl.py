@@ -462,7 +462,7 @@ class IntSerial(IntGen):
         IntGen.__init__(self,mdl)
 
     def _stim0(self,stimCoord,Ist):
-        pass
+        self.mdl.Istim = Ist
     
     def _stim1(self,stimCoord,Ist):
         self.mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
