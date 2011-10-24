@@ -19,7 +19,9 @@ for R in listR:
     i+=1
 
 
-pylab.plot(listR,sp)
+pylab.plot(listR[:5],sp[:5])
+#6cm/s => ~300 ohm
+
 #pylab.plot(tmdl.t,tmdl.Vm[15])
 #pylab.show()
 
