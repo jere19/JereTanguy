@@ -631,7 +631,11 @@ class IntPara(IntGen):
                 stimCoord,stimCoord2 : Coordinates of the stimulations
         """
 
+<<<<<<< HEAD
         def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,Iamp,dt):
+=======
+        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,Iamp):
+>>>>>>> +Variable max amplitude
             """Function used by the engine processes"""
             from mpi4py import MPI
             import cell_mdl
@@ -947,8 +951,13 @@ class IntPara(IntGen):
 
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
 
+<<<<<<< HEAD
         self.dt=0.05
         res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
+=======
+
+        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp)
+>>>>>>> +Variable max amplitude
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
 
