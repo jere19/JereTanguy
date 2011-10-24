@@ -951,13 +951,10 @@ class IntPara(IntGen):
 
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
 
-<<<<<<< HEAD
+
         self.dt=0.05
         res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
-=======
 
-        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp)
->>>>>>> +Variable max amplitude
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
 
