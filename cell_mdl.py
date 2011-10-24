@@ -11,6 +11,9 @@ from IPython.parallel import Client
 from warnings import warn
 from enthought.mayavi import mlab
 from scipy.signal import correlate
+import locale
+locale.setlocale(locale.LC_NUMERIC, 'C')
+import pylab
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -452,9 +455,16 @@ class IntGen():
             for i in range(1,self.Vm.shape[-1]):
                 p.mlab_source.scalars = self.Vm[...,i]
  
-    def speed(self,coord1,coord2):
+    def speed(self,coord1,coord2,fshow=False):
         assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
+
+        if isinstance(coord1,list):
+            coord1 = tuple(coord1)
+        if isinstance(coord2,list):
+            coord2 = tuple(coord2)
+
         x = self.Vm[coord1]
+        print x.shape
         y = self.Vm[coord2]
 
         CrossCorrelation = correlate(x-x.mean(),y-y.mean(),mode='same')
@@ -466,14 +476,22 @@ class IntGen():
         if self.mdl.Y.ndim == 2:
             dist = abs(coord2 - coord1) * self.mdl.hx
         elif self.mdl.Y.ndim == 3:
-            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
-            (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 )
+            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 )
         elif self.mdl.Y.ndim == 4:
             dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
             (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 + (abs(coord2[0] - \
             coord1[0])  * self.mdl.hz)**2 )
 
         print dist
+
+        if fshow:
+            pylab.subplot(211)
+            pylab.plot(self.t,x)
+            pylab.plot(self.t,y)
+            pylab.subplot(212)
+            pylab.plot(self.t,CrossCorrelation)
+            pylab.show()
+            
 
         return dist / delay, CrossCorrelation
 

@@ -3,7 +3,7 @@ reload(cell_mdl)
 from enthought.mayavi import mlab
 import numpy
 
-Nx,Ny,Nz = 50,0,0
+Nx,Ny,Nz = 50,50,0
 
 model = cell_mdl.Red3(Nx,Ny,Nz)
 #model2 = cell_mdl.Red3(Nx,Ny,Nz)
@@ -17,16 +17,11 @@ model = cell_mdl.Red3(Nx,Ny,Nz)
 #xyIstim2 = [40,82,95,97]
 #tmdl = cell_mdl.IntPara(model)
 tmdl = cell_mdl.IntSerial(model)
-tmdl.compute(tmax=1000,stimCoord=[2,4])
+tmdl.compute(tmax=1000,stimCoord=[2,4,2,4])
 
-import locale
-locale.setlocale(locale.LC_NUMERIC, 'C')
-
-import pylab
-
-pylab.plot(tmdl.t,tmdl.Vm[5])
-pylab.plot(tmdl.t,tmdl.Vm[15])
-pylab.show()
+#pylab.plot(tmdl.t,tmdl.Vm[5])
+#pylab.plot(tmdl.t,tmdl.Vm[15])
+#pylab.show()
 
 #tmdl2 = cell_mdl.IntSerial(model2)
 #tmdl2.compute(tmax=500,stimCoord=xyIstim1)
