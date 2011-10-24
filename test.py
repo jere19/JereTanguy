@@ -3,19 +3,23 @@ reload(cell_mdl)
 from enthought.mayavi import mlab
 import numpy
 
-Nx,Ny,Nz = 40,40,0
+Nx,Ny,Nz = 40,0,0
 
 model = cell_mdl.Red3(Nx,Ny,Nz)
 
 tmdl = cell_mdl.IntSerial(model)
+i=0
+listR = (50,100,500,700,1000,2000,3000,5000)
+sp = [0] * len(listR)
+for R in listR:
+    tmdl.mdl.Rax = R
+    tmdl.compute(tmax=1000,stimCoord=[2,4])
+    sp[i],tmp=tmdl.speed(5,15)
+    tmdl.reset()
+    i+=1
 
-#listR = (50,100,500,700,1000,2000,3000,5000)
-#for R in listR:
-tmdl.compute(tmax=1000,stimCoord=[2,4,5,35])
-tmdl.reset()
-    
 
-#pylab.plot(tmdl.t,tmdl.Vm[5])
+pylab.plot(listR,sp)
 #pylab.plot(tmdl.t,tmdl.Vm[15])
 #pylab.show()
 

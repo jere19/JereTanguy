@@ -30,12 +30,13 @@ class TissueModel(object):
         self.Padding=4
         self.time=0
         #Initialise state given the type of model
-        if dim==3:
+        self.dim = dim
+        if self.dim==3:
             Y0=[-50,0.079257,0.001]
-        elif dim==6:
+        elif self.dim==6:
             Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
         else:
-            Y0=numpy.zeros(dim)
+            Y0=numpy.zeros(self.dim)
         #parameters
         self._Cm=1
         self._Rax=500
@@ -113,6 +114,18 @@ class TissueModel(object):
         #option for noisy initial state
         if noise!=0.0:
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise 
+
+    def reset(self):
+        self.time=0
+        if self.dim==3:
+            Y0=[-50,0.079257,0.001]
+        elif self.dim==6:
+            Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
+        else:
+            Y0=numpy.zeros(self.dim)
+        shp = self.Y.shape
+        shp[-1] = 1
+        self.Y=numpy.tile(numpy.array(Y0),shp)
 
     def copyparams(self,mdl):
         """Retrieves parameters from 'mdl', if it has the same class as self."""
@@ -300,10 +313,6 @@ class Red3(TissueModel):
         self.dY=numpy.empty(self.Y.shape)
         #self.Istim[5:20,5]=0.2
         
-    def reset(self):
-        self.time=0
-        Y0=[-50,0.079257,0.001]
-        self.Y=numpy.tile(numpy.array(Y0),self.Y.shape)
 
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
@@ -353,10 +362,6 @@ class Red6(TissueModel):
         self.dY=numpy.empty(self.Y.shape)
         #self.Istim[5:20,5]=0.2
         
-    def reset(self):
-        self.time=0
-        Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
-        self.Y=numpy.tile(numpy.array(Y0),self.Y.shape)
 
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
@@ -409,7 +414,6 @@ class Red6(TissueModel):
 
 
 
-
 class IntGen():
     """Generic integrator class"""
 
@@ -425,6 +429,11 @@ class IntGen():
         logY=open(filename,'w')
         numpy.savez(logY,t=self.t,Y=self.Vm)
         logY.close()
+
+    def reset(self):
+        self.mdl.reset()
+
+
 
     def show(self):
         """show Vm in a graph. Works for 1D projects only"""
