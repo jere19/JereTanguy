@@ -112,8 +112,8 @@ class TissueModel(object):
         self.parlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz','masktempo'])
         #option for noisy initial state
         if noise!=0.0:
-            self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise    
-        
+            self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise 
+
     def copyparams(self,mdl):
         """Retrieves parameters from 'mdl', if it has the same class as self."""
         if self.Name!=mdl.Name:
@@ -300,6 +300,11 @@ class Red3(TissueModel):
         self.dY=numpy.empty(self.Y.shape)
         #self.Istim[5:20,5]=0.2
         
+    def reset(self):
+        self.time=0
+        Y0=[-50,0.079257,0.001]
+        self.Y=numpy.tile(numpy.array(Y0),self.Y.shape)
+
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
         #Variables
@@ -348,6 +353,11 @@ class Red6(TissueModel):
         self.dY=numpy.empty(self.Y.shape)
         #self.Istim[5:20,5]=0.2
         
+    def reset(self):
+        self.time=0
+        Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
+        self.Y=numpy.tile(numpy.array(Y0),self.Y.shape)
+
     def derivT(self,dt):
         """Computes temporal derivative for red3 model."""
         #Variables
@@ -454,7 +464,7 @@ class IntGen():
             raw_input("Press Enter to lauch the simulation...")
             for i in range(1,self.Vm.shape[-1]):
                 p.mlab_source.scalars = self.Vm[...,i]
- 
+
     def speed(self,coord1,coord2,fshow=False):
         assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
 
@@ -470,7 +480,11 @@ class IntGen():
         CrossCorrelation = correlate(x-x.mean(),y-y.mean(),mode='same')
 
         i_delay = numpy.argmax(CrossCorrelation)
-        delay = i_delay * self.dt
+
+        vectdelay = numpy.linspace(-self.t[-1]/2,self.t[-1]/2,len(CrossCorrelation))
+
+
+        delay = abs(vectdelay[i_delay]) * self.dt
         print delay
 
         if self.mdl.Y.ndim == 2:
@@ -489,7 +503,7 @@ class IntGen():
             pylab.plot(self.t,x)
             pylab.plot(self.t,y)
             pylab.subplot(212)
-            pylab.plot(self.t,CrossCorrelation)
+            pylab.plot(vectdelay,CrossCorrelation)
             pylab.show()
             
 
@@ -528,7 +542,7 @@ class IntSerial(IntGen):
         dtMin = self.dt
         dtMax = 6
         dVmax = 1
-        self.t=numpy.zeros(round(tmax/(self.dt*self.decim))+1)
+        self.t=numpy.ones(round(tmax/(self.dt*self.decim))+1) * self.mdl.time
         
         if stimCoord == -1:
             stimCoord = self.mdl.stimCoord
@@ -578,6 +592,7 @@ class IntSerial(IntGen):
                 self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
         self.Vm = self.Vm[...,1:NbIter-1]
         self.t = self.t[...,1:NbIter-1]
+
 
 class IntPara(IntGen):
     """Integrator class using parallel computation"""
