@@ -10,7 +10,7 @@ from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
 from warnings import warn
 from enthought.mayavi import mlab
-
+from scipy.signal import correlate
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -405,6 +405,7 @@ class IntGen():
                 mdl : model (of class Red3 or Red6)
         """
         self.mdl = mdl
+        self.Iamp=0.2
         
     def save(self,filename):
         """save t and Vm using the method numpy.savez"""
@@ -451,6 +452,30 @@ class IntGen():
             for i in range(1,self.Vm.shape[-1]):
                 p.mlab_source.scalars = self.Vm[...,i]
  
+    def speed(self,coord1,coord2):
+        assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
+        x = self.Vm[coord1]
+        y = self.Vm[coord2]
+
+        CrossCorrelation = correlate(x-x.mean(),y-y.mean(),mode='same')
+
+        i_delay = numpy.argmax(CrossCorrelation)
+        delay = i_delay * self.dt
+        print delay
+
+        if self.mdl.Y.ndim == 2:
+            dist = abs(coord2 - coord1) * self.mdl.hx
+        elif self.mdl.Y.ndim == 3:
+            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
+            (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 )
+        elif self.mdl.Y.ndim == 4:
+            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
+            (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 + (abs(coord2[0] - \
+            coord1[0])  * self.mdl.hz)**2 )
+
+        print dist
+
+        return dist / delay, CrossCorrelation
 
 class IntSerial(IntGen):
     """Integrator class using serial computation"""
@@ -516,7 +541,7 @@ class IntSerial(IntGen):
 
         #Integration
         while self.mdl.time<tmax:
-            Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
+            Ist=self.Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
             self.stim(stimCoord,Ist)
             self.stim(stimCoord2,Ist)
            # mdl.Istim[50:95,100]=Ist
@@ -573,7 +598,7 @@ class IntPara(IntGen):
                 stimCoord,stimCoord2 : Coordinates of the stimulations
         """
 
-        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam):
+        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,Iamp,dt):
             """Function used by the engine processes"""
             from mpi4py import MPI
             import cell_mdl
@@ -826,7 +851,6 @@ class IntPara(IntGen):
 
             decim=20
             NbIter=0
-            dt=0.05
             Ft = 0.15
 
             time=numpy.zeros(round(tmax/(dt*decim))+1)
@@ -849,7 +873,7 @@ class IntPara(IntGen):
 
 
             while (mdl.time<tmax):
-                Ist=0.2/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
+                Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
 
                 stim(mdl,xyIstim1,Ist)
                 stim(mdl,xyIstim2,Ist)
@@ -890,8 +914,8 @@ class IntPara(IntGen):
 
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
 
-
-        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams())
+        self.dt=0.05
+        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
 

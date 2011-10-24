@@ -3,22 +3,37 @@ reload(cell_mdl)
 from enthought.mayavi import mlab
 import numpy
 
-Nx,Ny,Nz = 80,120,0
+Nx,Ny,Nz = 50,0,0
 
 model = cell_mdl.Red3(Nx,Ny,Nz)
+#model2 = cell_mdl.Red3(Nx,Ny,Nz)
 
-model.hx = 0.09
-model.Rax = 200
+#model.hx = 0.09
+#model.Rax = 200
+#model2.Dy = 0
 
-xyIstim1 = [3,42,4,6] 
-xyIstim2 = [40,82,95,97]
+#xyIstim = [5,6] 
+#xyIstim1 = [5,6,0,54] 
+#xyIstim2 = [40,82,95,97]
 #tmdl = cell_mdl.IntPara(model)
-tmdl2 = cell_mdl.IntSerial(model)
-tmdl2.compute(tmax=5000,stimCoord=xyIstim1,stimCoord2=xyIstim2)
+tmdl = cell_mdl.IntSerial(model)
+tmdl.compute(tmax=1000,stimCoord=[2,4])
 
-logY=open('save.npz','w')
-numpy.savez(logY,t=tmdl2.t,Y=tmdl2.Vm)
-logY.close()
+import locale
+locale.setlocale(locale.LC_NUMERIC, 'C')
+
+import pylab
+
+pylab.plot(tmdl.t,tmdl.Vm[5])
+pylab.plot(tmdl.t,tmdl.Vm[15])
+pylab.show()
+
+#tmdl2 = cell_mdl.IntSerial(model2)
+#tmdl2.compute(tmax=500,stimCoord=xyIstim1)
+
+#logY=open('save.npz','w')
+#numpy.savez(logY,t=tmdl2.t,Y=tmdl2.Vm)
+#logY.close()
 
 #tmdl2.show()
 #mlab.imshow(tmdl2.Vm)
