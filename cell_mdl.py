@@ -243,7 +243,11 @@ class TissueModel(object):
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
-        Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)+self.Dz*self._derivative2(Var,2)
+
+        derivx = self.Dx*self._derivative2(Var,0)
+        derivy = self.Dy*self._derivative2(Var,1)
+        derivz = self.Dz*self._derivative2(Var,2)
+        Dif = derivx * (derivx > 0) + derivy * (derivy > 0) + derivz * (derivz > 0)
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
         return Dif*self.mask    
@@ -966,6 +970,7 @@ class IntPara(IntGen):
         tabResults = res.get()
 
         self.t = tabResults[0]['time']
+
         tabrank = numpy.empty(len(tabResults))
         for i in range(len(tabResults)):
             tabrank[i] = tabResults[i]['rank']
@@ -996,5 +1001,8 @@ class IntPara(IntGen):
                 self.Vm[x[0]:x[1],y[0]:y[1],...]=numpy.array(tabResults[i_client]['Vm'])
             else:
                 self.Vm[x[0]:x[1],:]=numpy.array(tabResults[i_client]['Vm'])
+
+        self.t = self.t[...,1:]
+        self.Vm = self.Vm[...,1:]
 
         return self.t,self.Vm
