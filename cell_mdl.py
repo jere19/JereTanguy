@@ -62,9 +62,9 @@ class TissueModel(object):
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
                                     self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
-            self.Dy=1/(2*self._Ray*self._Cm*self._hy)
-            self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
+            self.Dy=1/(self._Ray*self._Cm*self._hy**2)
+            self.Dz=1/(self._Raz*self._Cm*self._hz**2)
             self.parlist.extend(['Dx','Dy','Dz'])
             self.derivS=self._derivS3
             self.stimCoord=[0,0,0,0,0,0]
@@ -80,8 +80,8 @@ class TissueModel(object):
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
                                     self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
             #diffusion coeffs
-            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
-            self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
+            self.Dy=1/(self._Ray*self._Cm*self._hy**2)
             self.parlist.extend(['Dx','Dy'])
             self.derivS=self._derivS2
             self.stimCoord=[0,0,0,0]
@@ -94,7 +94,7 @@ class TissueModel(object):
             self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
                       ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
             #diffusion coeffs
-            self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
             self.parlist.append('Dx')
             self.derivS=self._derivS1   
             self.stimCoord=[0,0]
@@ -243,11 +243,10 @@ class TissueModel(object):
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
-
-        derivx = self.Dx*self._derivative2(Var,0)
-        derivy = self.Dy*self._derivative2(Var,1)
-        derivz = self.Dz*self._derivative2(Var,2)
-        Dif = derivx * (derivx > 0) + derivy * (derivy > 0) + derivz * (derivz > 0)
+        derivx = self.Dx * self._derivative2(Var,0)
+        derivy = self.Dy * self._derivative2(Var,1)
+        derivz = self.Dz * self._derivative2(Var,2)
+        Dif = derivx + derivy + derivz
         Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
         Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
         return Dif*self.mask    
