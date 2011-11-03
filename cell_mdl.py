@@ -141,7 +141,7 @@ class TissueModel(object):
     def _set_hx(self,hx):
         """mutator of hx"""
         self._hx = hx
-        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        try: self.Dx=1/(self._Rax*self._Cm*self._hx**2)
         except ValueError: warn("ValueError! Dx was not changed")
     hx = property(_get_hx,_set_hx)
 
@@ -151,7 +151,7 @@ class TissueModel(object):
     def _set_hy(self,hy):
         """mutator of hy"""
         self._hy = hy
-        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        try: self.Dy=1/(self._Ray*self._Cm*self._hy**2)
         except ValueError: warn("ValueError! Dy was not changed")
     hy = property(fget=_get_hy,fset=_set_hy)
 
@@ -161,7 +161,7 @@ class TissueModel(object):
     def _set_hz(self,hz):
         """mutator of hz"""
         self._hz = hz
-        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dz=1/(self._Raz*self._Cm*self._hz**2)
         except ValueError: warn("ValueError! Dz was not changed")
     hz = property(fget=_get_hz,fset=_set_hz)
 
@@ -170,12 +170,12 @@ class TissueModel(object):
         return self._Cm
     def _set_Cm(self,Cm):
         """mutator of Cm"""
-        self._Cm= Cm
-        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        self._Cm= Cm 
+        try: self.Dx=1/(self._Rax*self._Cm*self._hx**2)
         except ValueError: warn("ValueError! Dx was not changed")
-        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        try: self.Dy=1/(self._Ray*self._Cm*self._hy**2)
         except ValueError: warn("ValueError! Dy was not changed")
-        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dz=1/(self._Raz*self._Cm*self._hz**2)
         except ValueError: warn("ValueError! Dz was not changed")
     Cm = property(fget=_get_Cm,fset=_set_Cm)
 
@@ -185,7 +185,7 @@ class TissueModel(object):
     def _set_Rax(self,Rax):
         """mutator of Rax"""
         self._Rax = Rax
-        try: self.Dx=1/(2*self._Rax*self._Cm*self._hx)
+        try: self.Dx=1/(self._Rax*self._Cm*self._hx**2)
         except ValueError: warn("ValueError! Dx was not changed")
     Rax = property(fget=_get_Rax,fset=_set_Rax)
 
@@ -195,7 +195,7 @@ class TissueModel(object):
     def _set_Ray(self,Ray):
         """mutator of Ray"""
         self._Ray = Ray
-        try: self.Dy=1/(2*self._Ray*self._Cm*self._hy)
+        try: self.Dy=1/(self._Ray*self._Cm*self._hy**2)
         except ValueError: warn("ValueError! Dy was not changed")
     Ray = property(fget=_get_Ray,fset=_set_Ray)
 
@@ -205,7 +205,7 @@ class TissueModel(object):
     def _set_Raz(self,Raz):
         """mutator of Raz"""
         self._Raz = Raz
-        try: self.Dz=1/(2*self._Raz*self._Cm*self._hz)
+        try: self.Dz=1/(self._Raz*self._Cm*self._hz**2)
         except ValueError: warn("ValueError! Dz was not changed")
     Raz = property(fget=_get_Raz,fset=_set_Raz)
 
