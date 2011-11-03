@@ -9,7 +9,10 @@ import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
 from IPython.parallel import Client
 from warnings import warn
-from enthought.mayavi import mlab
+try:
+    from enthought.mayavi import mlab
+except:
+    pass
 from scipy.signal import correlate
 import locale
 locale.setlocale(locale.LC_NUMERIC, 'C')
