@@ -39,9 +39,9 @@ class TissueModel(object):
             Y0=numpy.zeros(self.dim)
         #parameters
         self._Cm=1
-        self._Rax=500
-        self._Ray=500
-        self._Raz=500
+        self._Rax=4500
+        self._Ray=4500
+        self._Raz=4500
         self._hx=0.03
         self._hy=0.03
         self._hz=0.03
@@ -123,7 +123,7 @@ class TissueModel(object):
             Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
         else:
             Y0=numpy.zeros(self.dim)
-        shp = self.Y.shape
+        shp = list(self.Y.shape)
         shp[-1] = 1
         self.Y=numpy.tile(numpy.array(Y0),shp)
 
@@ -486,7 +486,6 @@ class IntGen():
             coord2 = tuple(coord2)
 
         x = self.Vm[coord1]
-        print x.shape
         y = self.Vm[coord2]
 
         CrossCorrelation = correlate(x-x.mean(),y-y.mean(),mode='same')
@@ -497,7 +496,6 @@ class IntGen():
 
 
         delay = abs(vectdelay[i_delay]) * self.dt
-        print delay
 
         if self.mdl.Y.ndim == 2:
             dist = abs(coord2 - coord1) * self.mdl.hx
@@ -507,8 +505,6 @@ class IntGen():
             dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
             (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 + (abs(coord2[0] - \
             coord1[0])  * self.mdl.hz)**2 )
-
-        print dist
 
         if fshow:
             pylab.subplot(211)
