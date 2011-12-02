@@ -4,19 +4,38 @@ Red3: Uses reduced 3 vars uterine cell model (J.Laforet).
 Red6: Uses reduced 6 vars uterine cell model (S.Rihana)."""
 
 import numpy
-import pylab
-import matplotlib.cm as cm
 from scipy.ndimage.filters import correlate1d
-from IPython.parallel import Client
+try:
+    from IPython.parallel import Client
+except:
+    hasmpi = False
+else:
+    hasmpi = True
 from warnings import warn
 try:
     from enthought.mayavi import mlab
 except:
-    pass
+    hasmayavi = False
+else:
+    hasmayavi = True
+
+
 from scipy.signal import correlate
 import locale
 locale.setlocale(locale.LC_NUMERIC, 'C')
-import pylab
+try:
+    import pylab
+    import matplotlib.cm as cm
+except:
+    hasmatplot = False
+else:
+    hasmatplot = True
+
+import multiprocessing as mp
+import ctypes
+import shmarray
+import cell_mdl
+from math import ceil,log
 
 class TissueModel(object):
     """Generic cell and tissue model."""
@@ -48,8 +67,9 @@ class TissueModel(object):
         self._hx=0.03
         self._hy=0.03
         self._hz=0.03
+        self.flag = True
         #state
-        if Nx*Ny*Nz:
+        if Nx*Ny*Nz: #3D
             #update dims with padding
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
             self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
@@ -72,7 +92,7 @@ class TissueModel(object):
             self.derivS=self._derivS3
             self.stimCoord=[0,0,0,0,0,0]
             self.stimCoord2=[0,0,0,0,0,0]
-        elif Nx*Ny:
+        elif Nx*Ny: #2D
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
             self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
             self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,1))
@@ -89,7 +109,7 @@ class TissueModel(object):
             self.derivS=self._derivS2
             self.stimCoord=[0,0,0,0]
             self.stimCoord2=[0,0,0,0]
-        elif Nx>1:
+        elif Nx>1: #1D
             self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
             self.Y=numpy.tile(numpy.array(Y0),(self.Nx,1))
             #mask for padding borders    
@@ -102,7 +122,7 @@ class TissueModel(object):
             self.derivS=self._derivS1   
             self.stimCoord=[0,0]
             self.stimCoord2=[0,0]                        
-        else:
+        else: #0D
             self.Y=numpy.array(Y0)
             self.derivS=self._derivS0
             self.stimCoord=[0,0]
@@ -119,6 +139,7 @@ class TissueModel(object):
             self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise 
 
     def reset(self):
+        """set Y and time parameters to original value"""
         self.time=0
         if self.dim==3:
             Y0=[-50,0.079257,0.001]
@@ -235,14 +256,16 @@ class TissueModel(object):
     def diff1d(self,Var):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)
-        Dif[self.stimCoord[0]:self.stimCoord[1]]=0
-        Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
+        if self.flag:
+            Dif[self.stimCoord[0]:self.stimCoord[1]]=0
+            Dif[self.stimCoord2[0]:self.stimCoord2[1]]=0
         return Dif*self.mask   
     def diff2d(self,Var):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
-        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
-        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
+        if self.flag:
+            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
+            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
@@ -250,20 +273,21 @@ class TissueModel(object):
         derivy = self.Dy * self._derivative2(Var,1)
         derivz = self.Dz * self._derivative2(Var,2)
         Dif = derivx + derivy + derivz
-        Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
-        Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
+        if self.flag:
+            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
+            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
         return Dif*self.mask    
     def _derivS0(self):
-        """Computes spatial derivative to get propagation."""
+        """Computes spatial derivative to get propagation. (0D)"""
         pass
     def _derivS1(self):
-        """Computes spatial derivative to get propagation."""
+        """Computes spatial derivative to get propagation. (1D)"""
         self.dY[...,0]+=self.diff1d(self.Y[...,0])
     def _derivS2(self):
-        """Computes spatial derivative to get propagation."""
+        """Computes spatial derivative to get propagation. (2D)"""
         self.dY[...,0]+=self.diff2d(self.Y[...,0])
     def _derivS3(self):
-        """Computes spatial derivative to get propagation."""
+        """Computes spatial derivative to get propagation. (3D)"""
         self.dY[...,0]+=self.diff3d(self.Y[...,0])    
     def plotstate(self):
         """Plot state of the model with the suitable method, according its dimensions."""
@@ -320,7 +344,7 @@ class Red3(TissueModel):
         #self.Istim[5:20,5]=0.2
         
 
-    def derivT(self,dt):
+    def derivT(self,dt,mp=False):
         """Computes temporal derivative for red3 model."""
         #Variables
         Vm=self.Y[...,0]
@@ -344,8 +368,10 @@ class Red3(TissueModel):
         self.dY *= self.masktempo
         #update Y
         self.derivS()
-        self.Y+=self.dY*dt
-        
+        # if the integrator uses shared memory, we don't allocate Y here
+        if not(mp):    
+            self.Y+=self.dY*dt
+
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
@@ -369,7 +395,7 @@ class Red6(TissueModel):
         #self.Istim[5:20,5]=0.2
         
 
-    def derivT(self,dt):
+    def derivT(self,dt,mp=False):
         """Computes temporal derivative for red3 model."""
         #Variables
         Vm=self.Y[...,0]
@@ -415,9 +441,168 @@ class Red6(TissueModel):
         #update Y
         self.dY *= self.masktempo
         self.derivS()
-        self.Y+=self.dY*dt
+        if not(mp):
+            self.Y+=self.dY*dt
+
+def profilepara(*args):
+    import cProfile
+    import multiprocessing as mp
+    name = mp.current_process().name
+    rank = args[0]
+    cProfile.runctx("parallelcomp(*args)", globals(), locals(), filename=('Process-'+str(rank)+'.prof'))    
+
+def parallelcomp(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,dt,Y,mask,count,Vm,time,mutex,att,parti):
+     """Function used by the engine processes"""
+     import cell_mdl
+     import numpy
+     try:
+         from progressbar import Bar,ProgressBar,Percentage
+         showbar=True
+     except:
+         showbar=False
+
+     def findlimitsx(rank,nbx,Nx):
+         newNxx = round( (Nx + (nbx-1) * 2) / nbx )
+         x = [0,0]
+         if (rank%nbx==0):
+             x = [0,newNxx]
+         elif rank%nbx==(nbx-1):
+             x = [rank%nbx * newNxx - rank%nbx * 2,Nx]
+             newNxx = x[1] - x[0]
+         else:
+             x[0] = rank%nbx * newNxx - rank%nbx * 2
+             x[1] = x[0] + newNxx
+         return x,newNxx
+
+#     Which rows should I compute?
+     [x,newNx] = findlimitsx(rank,N,Nx)
+
+
+#     Stimulation (global coordinates)
+     xyIstim1 = stimCoord 
+     xyIstim2 = stimCoord2
+
+
+#     computing the local coordinates
+     if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
+         xyIstim1[0:2] = [-1,-1]
+     else:
+         xyIstim1[0:2] = [max(xyIstim1[0],x[0])-x[0],min(xyIstim1[1],x[-1])-x[0]]
+
+     if (xyIstim2[0] > x[-1]) or (xyIstim2[1] < x[0]):
+         xyIstim2[0:2] = [-1,-1]
+     else:
+         xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],min(xyIstim2[1],x[-1])-x[0]]
+
+#     Creation of the model (one for each process)
+     bdrs=[False] * (2 + bool(Ny)*2 + bool(Nz)*2)
+     if listparam['Name'] == 'Red6':
+         mdl=cell_mdl.Red6(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
+     elif listparam['Name'] == 'Red3':
+         mdl=cell_mdl.Red3(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
+     mdl.setlistparams(listparam)
+     mdl.Name += 'p'
+
+     mdl.Y = Y[x[0]:x[1],...]
+     mdl.mask = mask[x[0]:x[1],...]
+
+     if rank == 0:
+        mdl.mask[-1,...] = 0
+     if rank == N - 1:
+        mdl.mask[0,...] = 0
         
 
+     def modify(var,x):
+         if not(isinstance(var,int)) and not(isinstance(var,float)):
+             return var[x[0]:x[1],...]
+         else:
+             return var
+
+     mdl.masktempo = modify(mdl.masktempo,x)
+     mdl.hx = modify(mdl.hx,x)
+     mdl.hy = modify(mdl.hy,x)
+     mdl.hz = modify(mdl.hz,x)
+     mdl.Rax = modify(mdl.Rax,x)
+     mdl.Ray = modify(mdl.Ray,x)
+     mdl.Raz = modify(mdl.Raz,x)
+
+#     Tells the model where the stimuli are
+     if xyIstim1[0] != -1:
+         mdl.stimCoord = xyIstim1
+     if xyIstim2[0] != -1:
+         mdl.stimCoord2 = xyIstim2
+
+     def _stim1(mdl,stimCoord,Ist):
+         if stimCoord[0] != -1:
+             mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
+
+     def _stim2(mdl,stimCoord,Ist):
+         if stimCoord[0] != -1 and stimCoord[2] != -1:
+             mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
+
+     def _stim3(mdl,stimCoord,Ist):
+         if stimCoord[0] != -1 and stimCoord[2] != -1:
+             mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
+
+     decim=20
+     NbIter=0
+     Ft = 0.15
+
+#     time=numpy.zeros(round(tmax/(dt*decim))+1)
+
+     if Nx*Ny*Nz:
+         stim = _stim3
+     elif Nx*Ny:
+         stim = _stim2
+     elif Nx:
+         stim = _stim1
+    
+     test = [rank != 0,rank != N-1]
+     if (rank==0) and showbar:
+         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(time)).start()
+
+     lx,ly = mdl.dY.shape[:2]
+#     decim2 = 10
+
+     mdl.flag = True
+
+     while (mdl.time<tmax):
+         Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
+
+         if mdl.flag and (mdl.time != 0) and (Ist == 0):
+            mdl.flag = False
+
+         stim(mdl,xyIstim1,Ist)
+         stim(mdl,xyIstim2,Ist)
+
+         mdl.derivT(dt,True)
+
+         if (not round(mdl.time/dt)%decim):
+             mutex.acquire(timeout=2)
+             count.value += 1
+             if count.value == N:
+                for i in range(N-1):
+                    att.release()
+                count.value = 0
+                mutex.release()
+             else:
+                mutex.release()
+                att.acquire(timeout=2)
+
+         Y[x[0]+test[0]:x[1]-test[1],...] += mdl.dY[0+test[0]:lx-test[1],...] * dt
+
+         mdl.time +=dt
+        
+         if (rank == 0) and (not round(mdl.time/dt)%decim):
+             NbIter+=1
+             time[NbIter]=mdl.time
+             Vm[...,NbIter] = Y[...,0]           
+             if showbar:
+                pbar.update(mdl.time)
+
+     if (rank == 0) and showbar:    
+        pbar.finish()
+        print type(Y)
 
 
 class IntGen():
@@ -430,13 +615,39 @@ class IntGen():
         self.mdl = mdl
         self.Iamp=0.2
         
-    def save(self,filename):
+    def save(self,filename,limitsize=500,tmax=1000):
         """save t and Vm using the method numpy.savez"""
-        logY=open(filename,'w')
-        numpy.savez(logY,t=self.t,Y=self.Vm)
-        logY.close()
+        count = 1
+#        nmax = round(tmax * self.dt)
+        t_tmp = self.t
+        v_tmp = self.Vm
+
+        if v_tmp.nbytes / (2**20) > limitsize:
+            while t_tmp[-1] > tmax*count:
+                ind = t_tmp.searchsorted(tmax*count)
+                logY=open(filename+'-'+str(count)+'-t.npy','w')
+                numpy.save(logY,t_tmp[:ind])
+                logY=open(filename+'-'+str(count)+'-Y.npy','w')
+                numpy.save(logY,v_tmp[...,:ind])
+                logY.close()
+                t_tmp = t_tmp[ind:]
+                v_tmp = v_tmp[...,ind:]
+                count += 1
+            if len(t_tmp) > 0:
+                logY=open(filename+'-'+str(count)+'-t.npy','w')
+                numpy.save(logY,t_tmp)
+                logY=open(filename+'-'+str(count)+'-Y.npy','w')
+                numpy.save(logY,v_tmp)
+                logY.close() 
+        else:
+            logY=open(filename+'-t.npy','w')
+            numpy.save(logY,t_tmp)
+            logY=open(filename+'-Y.npy','w')
+            numpy.save(logY,v_tmp)
+            logY.close()           
 
     def reset(self):
+        """set Y and time parameters of the model to their original value"""
         self.mdl.reset()
 
 
@@ -446,14 +657,17 @@ class IntGen():
         assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
 
         if self.Vm.ndim == 2:
+            assert hasmatplot, "Sorry, you have to have pylab and matplot installed!"
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
+            assert hasmayavi, "Sorry, you have to have mayavi installed!"
             s = mlab.surf(self.Vm[...,1])
             raw_input("Press Enter to lauch the simulation...")
             for i in range(1,self.Vm.shape[-1]):
                 s.mlab_source.scalars = self.Vm[...,i]
         elif self.Vm.ndim == 4:
+            assert hasmayavi, "Sorry, you have to have mayavi installed!"
             p = mlab.pipeline.scalar_field(self.Vm[...,1])
             s = mlab.pipeline.image_plane_widget( p,
                                         plane_orientation='x_axes',
@@ -481,6 +695,7 @@ class IntGen():
                 p.mlab_source.scalars = self.Vm[...,i]
 
     def speed(self,coord1,coord2,fshow=False):
+        """calculate the mean spead between two points"""
         assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
 
         if isinstance(coord1,list):
@@ -582,9 +797,15 @@ class IntSerial(IntGen):
 
         assert flag0D or ((self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2)),"stimCoord and/or stimCoord2 have incorrect dimensions"
 
+        self.mdl.flag = True
+
         #Integration
         while self.mdl.time<tmax:
-            Ist=self.Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(1*tmax))
+            Ist=self.Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax))
+
+            if (self.mdl.time != 0) and (Ist == 0):
+                self.mdl.flag = False
+
             self.stim(stimCoord,Ist)
             self.stim(stimCoord2,Ist)
            # mdl.Istim[50:95,100]=Ist
@@ -604,6 +825,81 @@ class IntSerial(IntGen):
         self.Vm = self.Vm[...,1:NbIter-1]
         self.t = self.t[...,1:NbIter-1]
 
+class IntParaMP(IntGen):
+    """Integrator class using parallel computation"""
+
+    def __init__(self,mdl,N=None):
+        """The constructor.
+                mdl : model (of class Red3 or Red6)
+                N : number of processes
+        """
+        IntGen.__init__(self,mdl)
+        
+        self.mdl = mdl
+        
+        self.Y = shmarray.ones(mdl.Y.shape, numpy.float)
+        self.Y[...] = mdl.Y
+
+        if N is None:
+            self.N = mp.cpu_count()
+        else:
+            self.N = N
+        # data,N = rearrange(_data,N)
+
+        
+        
+    def compute(self,tmax=500,stimCoord=-1,stimCoord2=-1,profiling=False):
+        
+        try: Nz = self.mdl.Nz 
+        except AttributeError: Nz = 0
+
+        try: Ny = self.mdl.Ny 
+        except AttributeError: Ny = 0
+
+        Nx = self.mdl.Nx
+    
+        if stimCoord == -1:
+            stimCoord = self.mdl.stimCoord
+
+        else:
+            self.mdl.stimCoord = stimCoord
+
+        if stimCoord2 == -1:
+            stimCoord2 = self.mdl.stimCoord2
+        else:
+            self.mdl.stimCoord2 = stimCoord2
+
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+
+        self.dt=0.05
+        condi = mp.Condition()
+        
+        count = mp.Value('i',0)
+        
+        p = [0] * self.N
+        res =  [0] * self.N
+
+        shp = list(self.mdl.Y.shape[:-1])
+        shp.append(round(tmax/(self.dt*20))+1)
+
+        self.Vm = shmarray.zeros(shp, numpy.float)
+        self.t = shmarray.zeros(round(tmax/(self.dt*20))+1, numpy.float)
+        s_mutex = mp.Semaphore(1)
+        s_attente = mp.Semaphore(0)
+        s_parti = mp.Semaphore(0)
+        
+        print 'nombre de processus : ' + str(self.N)
+
+        for n in range(self.N): 
+            if profiling:
+                p[n] = mp.Process(target=cell_mdl.profilepara, args = (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,s_attente,s_parti))
+            else:
+                p[n] = mp.Process(target=cell_mdl.parallelcomp, args = (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,s_attente,s_parti))
+            p[n].start()
+
+        p[0].join()
+
+        
 
 class IntPara(IntGen):
     """Integrator class using parallel computation"""
@@ -612,6 +908,7 @@ class IntPara(IntGen):
         """The constructor.
                 mdl : model (of class Red3 or Red6)
         """
+        assert hasmpi, "mpi does not seem to be present in your system... sorry!"
         IntGen.__init__(self,mdl)
         #find the engine processes
         rc = Client(profile='mpi')
@@ -916,11 +1213,14 @@ class IntPara(IntGen):
                 stim = _stim1
                 comm = _comm1
                 test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1]
-
+            
+            mdl.flag = True
 
             while (mdl.time<tmax):
-                Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(1*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(1*tmax))
+                Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
 
+                if (mdl.time != 0) and (Ist == 0):
+                    mdl.flag = False
                 stim(mdl,xyIstim1,Ist)
                 stim(mdl,xyIstim2,Ist)
 
@@ -970,6 +1270,7 @@ class IntPara(IntGen):
         self.t = tabResults[0]['time']
 
         tabrank = numpy.empty(len(tabResults))
+
         for i in range(len(tabResults)):
             tabrank[i] = tabResults[i]['rank']
 

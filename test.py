@@ -1,21 +1,30 @@
 import cell_mdl
+import multiprocessing as mp
+import numpy as np
+import shmarray as sa
 reload(cell_mdl)
-from enthought.mayavi import mlab
-import numpy
+import cProfile
+Nx,Ny,Nz = 50,50,5
 
-Nx,Ny,Nz = 80,120,0
-
+print "creation du modele"
 model = cell_mdl.Red3(Nx,Ny,Nz)
 
-tmdl = cell_mdl.IntPara(model)
+print "modele temporelle"
+tmdl = cell_mdl.IntParaMP(model)
 
-shp = tmdl.mdl.Y.shape[:-1]
-R = tmdl.mdl.Rax
+print 'calcul'
+tmdl.compute(1000,[2,10,2,10,2,3])
 
-tmdl.mdl.Rax = numpy.ones(shp) * R + numpy.random.uniform(-R/10,R/10,shp)
-tmdl.mdl.Ray = numpy.ones(shp) * R + numpy.random.uniform(-R/10,R/10,shp)
-tmdl.mdl.hx = 0.06
-tmdl.mdl.hy = 0.06
-tmdl.compute(tmax=1000,stimCoord=[3,42,4,6],stimCoord2=[40,82,95,97])
+tmdl.save('test3D')
 
-tmdl.show()
+#def truc(n,V):
+#    V[n,2] = n
+
+
+#Vm = sa.ones((5,5))
+##tmp = np.empty((5,5,2))
+##Vm.value = tmp
+
+#for n in range(4): 
+#    print n
+#    mp.Process(target=truc, args = (n,Vm)).start()
