@@ -95,7 +95,7 @@ if showbar:
 i=0
 
 
-x,y,z,tt = Y.shape
+x,y,z = Y.shape[:-1]
 
 
 if (len(sys.argv)>=4):
@@ -103,13 +103,14 @@ if (len(sys.argv)>=4):
         inp = raw_input("Enter the coordinates for the visualisation : '(x,y,z)' ")
         exec( '(xmax,ymax,zmax) = ' + inp)
 else:
-    imax = Y.argmax()
-    tmax = imax % tt
-    zmax = ( (imax - tmax) / tt ) % z
-    ymax = ( (imax - tmax - zmax * z) / z / tt ) % y 
-    xmax = ( (imax - tmax - zmax * z - ymax * y) / z / tt / y ) % x 
-
+    imax = abs(Y[...,-1]).argmax()
+    zmax = imax % z
+    ymax = ( (imax - zmax) / z ) % y 
+    xmax = (imax -y -z) / y / z
+mlab.figure(size=(800,600))
 p = mlab.pipeline.scalar_field(Y[...,i])
+p.scene.background = (0.9,0.9,0.9)
+titl=mlab.title(str("Potential at time: %.0f ms."% t[i]),size=0.5)
 s = mlab.pipeline.image_plane_widget( p,
                             plane_orientation='x_axes',
                             slice_index=xmax,
@@ -141,7 +142,7 @@ for i in range(int(tstep/round(max(t)/len(t))),len(t),int(tstep/round(max(t)/len
     # The next four lines are just like MATLAB.
     #
     p.mlab_source.scalars = Y[...,i]
-
+    titl.text=str("Potential at time: %.0f ms."% t[i])
     filename = str('png/2F_%04d' % i) + '.png'
     mlab.savefig(filename)
     if showbar:
@@ -165,10 +166,10 @@ command = ('mencoder',
            'mf://png/2F*.png',
            '-mf',
            'type=png:w=800:h=600:fps=25',
-           '-ovc',
-           'lavc',
-           '-lavcopts',
-           'vcodec=mpeg4',
+          '-ovc',
+           'xvid',
+           '-xvidencopts',
+           'pass=1',
            '-oac',
            'copy',
            '-o',

@@ -18,8 +18,6 @@ except:
     hasmayavi = False
 else:
     hasmayavi = True
-
-
 from scipy.signal import correlate
 import locale
 locale.setlocale(locale.LC_NUMERIC, 'C')
@@ -30,7 +28,6 @@ except:
     hasmatplot = False
 else:
     hasmatplot = True
-
 import multiprocessing as mp
 import ctypes
 import shmarray
@@ -602,7 +599,6 @@ def parallelcomp(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,dt,Y,m
 
      if (rank == 0) and showbar:    
         pbar.finish()
-        print type(Y)
 
 
 class IntGen():
@@ -623,22 +619,35 @@ class IntGen():
         v_tmp = self.Vm
 
         if v_tmp.nbytes / (2**20) > limitsize:
-            while t_tmp[-1] > tmax*count:
-                ind = t_tmp.searchsorted(tmax*count)
-                logY=open(filename+'-'+str(count)+'-t.npy','w')
-                numpy.save(logY,t_tmp[:ind])
-                logY=open(filename+'-'+str(count)+'-Y.npy','w')
-                numpy.save(logY,v_tmp[...,:ind])
-                logY.close()
-                t_tmp = t_tmp[ind:]
-                v_tmp = v_tmp[...,ind:]
-                count += 1
-            if len(t_tmp) > 0:
-                logY=open(filename+'-'+str(count)+'-t.npy','w')
-                numpy.save(logY,t_tmp)
-                logY=open(filename+'-'+str(count)+'-Y.npy','w')
-                numpy.save(logY,v_tmp)
-                logY.close() 
+            toobig = True
+            while toobig:
+                while t_tmp[-1] > tmax*count:
+                    ind = t_tmp.searchsorted(tmax*count)
+                    if v_tmp[...,:ind] / (2**20) > limitsize:
+                        break
+                    else:
+                        toobig = False
+                    logY=open(filename+'-'+str(count)+'-t.npy','w')
+                    numpy.save(logY,t_tmp[:ind])
+                    logY=open(filename+'-'+str(count)+'-Y.npy','w')
+                    numpy.save(logY,v_tmp[...,:ind])
+                    logY.close()
+                    t_tmp = t_tmp[ind:]
+                    v_tmp = v_tmp[...,ind:]
+                    count += 1
+                if len(t_tmp) > 0:
+                    if v_tmp / (2**20) > limitsize:
+                        break
+                    else:
+                        toobig = False
+                        logY=open(filename+'-'+str(count)+'-t.npy','w')
+                        numpy.save(logY,t_tmp)
+                        logY=open(filename+'-'+str(count)+'-Y.npy','w')
+                        numpy.save(logY,v_tmp)
+                        logY.close()
+                if toobig:
+                    warn('the file is too big: tmax is divided by 2')
+                    tmax /= 2
         else:
             logY=open(filename+'-t.npy','w')
             numpy.save(logY,t_tmp)
