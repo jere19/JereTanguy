@@ -463,10 +463,10 @@ def profilepara(*args):
     """Function calling the engine process function and profiling it"""
     from cProfile import runctx
     rank = args[0]
-    runctx("parallelcomp(*args)", globals(), locals(), 
+    runctx("parallelcompMP(*args)", globals(), locals(), 
                                         filename=('Process-'+str(rank)+'.prof'))
 
-def parallelcomp(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
+def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
                                     dt,Y,mask,count,Vm,time,mutex,att):
     """Function used by the engine processes"""
 
@@ -667,11 +667,35 @@ class IntGen():
                     warn('the file is too big: tmax is divided by 2')
                     tmax /= 2
         else:
-            logY=open(filename+'-t.npy','w')
+            logY = open(filename+'-t.npy','w')
             numpy.save(logY,t_tmp)
-            logY=open(filename+'-Y.npy','w')
+            logY = open(filename+'-Y.npy','w')
             numpy.save(logY,v_tmp)
-            logY.close()           
+            logY.close()
+
+
+
+        f = open(filename+'.txt','w')
+        f.write('Integrator : ' + self.__class__.__name__ +' \n')
+        if not('Nz' in self.mdl.__dict__):
+            if not ('Ny' in self.mdl.__dict__):
+                f.write('Dimension : ' + str(self.mdl.Nx) + ' (1D) \n')
+            else:
+                f.write('Dimension : ' + str(self.mdl.Nx) + 'x' + 
+                                                str(self.mdl.Ny) + ' (2D) \n')
+        else:
+            f.write('Dimension : ' + str(self.mdl.Nx) + 'x' + str(self.mdl.Ny) +
+                                            str(self.mdl.Ny)  + ' (2.5D) \n')
+        f.write('Duration : ' + str(max(self.t)) + 'ms \n')
+        f.write('Coordinates of the stimulation :' + str(self.mdl.stimCoord) +
+                                     ' and ' + str(self.mdl.stimCoord2) +' \n')
+        f.write('Model : ' + self.mdl.Name +'\n')
+        f.write('\t parameters of this models : \n')
+        for par in self.mdl.parlist:
+            f.write('\t\t ' + str(par) + ' : ' + str(self.mdl.__dict__[par]) + 
+                                                                        '\n')
+        f.close()
+
 
     def reset(self):
         """set Y and time parameters of the model to their original value"""
@@ -935,7 +959,7 @@ class IntParaMP(IntGen):
         self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,
         s_attente))
             else:
-                p[n] = mp.Process(target=parallelcomp, args = 
+                p[n] = mp.Process(target=parallelcompMP, args = 
         (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),
         self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,
         s_attente))
@@ -986,7 +1010,7 @@ class IntPara(IntGen):
 
         def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,
                                                                     Iamp,dt):
-
+            import cell_mdl
             """Function used by the engine processes"""
             from mpi4py import MPI
 

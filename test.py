@@ -15,7 +15,7 @@ tmdl = cell_mdl.IntParaMP(model)
 print 'calcul'
 tmdl.compute(5,[2,10,2,10])
 
-#tmdl.save('test3D')
+tmdl.save('testlog')
 
 #def truc(n,V):
 #    V[n,2] = n
