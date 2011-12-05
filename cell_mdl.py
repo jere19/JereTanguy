@@ -7,146 +7,152 @@ import numpy
 from scipy.ndimage.filters import correlate1d
 try:
     from IPython.parallel import Client
-except:
-    hasmpi = False
+except ImportError:
+    HASMPI = False
 else:
-    hasmpi = True
+    HASMPI = True
 from warnings import warn
 try:
     from enthought.mayavi import mlab
-except:
-    hasmayavi = False
+except ImportError:
+    HASMAYAVI = False
 else:
-    hasmayavi = True
+    HASMAYAVI = True
 from scipy.signal import correlate
 import locale
 locale.setlocale(locale.LC_NUMERIC, 'C')
 try:
     import pylab
     import matplotlib.cm as cm
-except:
-    hasmatplot = False
+except ImportError:
+    HASMATPLOT = False
 else:
-    hasmatplot = True
+    HASMATPLOT = True
 import multiprocessing as mp
-import ctypes
 import shmarray
-import cell_mdl
-from math import ceil,log
+#from math import ceil, log
 
 class TissueModel(object):
     """Generic cell and tissue model."""
-    def __init__(self,dim,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
+    def __init__(self, dim, Nx, Ny=0, Nz=0, noise=0.0, 
+                borders=[True,True,True,True,True,True] ):
         """Model init.
             dim: number of variables of state vector.
             Nx: number of cells along X.
             Ny: number of cells along Y.
             Nz: number of cells along Z.
             noise: noise coefficient for initial state.
-            borders: boolean array [firstX,lastX,firstY,lastY,firstZ,lastZ]"""
+            borders: boolean array [firstX,lastX,firstY,lastY,firstZ,lastZ]"""   
         #dimensions
-        self.Name="Generic!"
-        self.Padding=4
-        self.time=0
+        self.Name = "Generic!"
+        self.Padding = 4
+        self.time = 0
         #Initialise state given the type of model
         self.dim = dim
-        if self.dim==3:
-            Y0=[-50,0.079257,0.001]
-        elif self.dim==6:
-            Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
+        if self.dim == 3:
+            Y0 = [-50,0.079257,0.001]
+        elif self.dim == 6:
+            Y0 = [-50,0.0015709,0.8,0.8,0.079257,0.001]
         else:
-            Y0=numpy.zeros(self.dim)
+            Y0 = numpy.zeros(self.dim)
         #parameters
-        self._Cm=1
-        self._Rax=4500
-        self._Ray=4500
-        self._Raz=4500
-        self._hx=0.03
-        self._hy=0.03
-        self._hz=0.03
+        self._Cm = 1
+        self._Rax = 4500
+        self._Ray = 4500
+        self._Raz = 4500
+        self._hx = 0.03
+        self._hy = 0.03
+        self._hz = 0.03
         self.flag = True
         #state
         if Nx*Ny*Nz: #3D
             #update dims with padding
-            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
-            self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
-            self.Nz=Nz+borders[4]*self.Padding/2+borders[5]*self.Padding/2
+            self.Nx = Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Ny = Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
+            self.Nz = Nz+borders[4]*self.Padding/2+borders[5]*self.Padding/2
             #generate full state
-            self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,self.Nz,1))
+            self.Y = numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,self.Nz,1))
             #mask for padding borders  
-            self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
-            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2,
-                      borders[2]*self.Padding/2:self.Ny-borders[3]*self.Padding/2,
-                      borders[4]*self.Padding/2:self.Nz-borders[5]*self.Padding/2
-                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
-                                    self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
-                                    self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2))
+            self.mask = 1e-4*numpy.ones(self.Y.shape[0:-1])
+            self.mask[borders[0]*self.Padding/2:
+                self.Nx-borders[1]*self.Padding/2,borders[2]*self.Padding/2:
+                self.Ny-borders[3]*self.Padding/2,borders[4]*self.Padding/2:
+                self.Nz-borders[5]*self.Padding/2] = numpy.ones(
+                (self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
+                self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2,
+                self.Nz-borders[4]*self.Padding/2-borders[5]*self.Padding/2)
+                )
             #diffusion coeffs
-            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
-            self.Dy=1/(self._Ray*self._Cm*self._hy**2)
-            self.Dz=1/(self._Raz*self._Cm*self._hz**2)
-            self.parlist.extend(['Dx','Dy','Dz'])
-            self.derivS=self._derivS3
-            self.stimCoord=[0,0,0,0,0,0]
-            self.stimCoord2=[0,0,0,0,0,0]
+            self.Dx = 1/(self._Rax*self._Cm*self._hx**2)
+            self.Dy = 1/(self._Ray*self._Cm*self._hy**2)
+            self.Dz = 1/(self._Raz*self._Cm*self._hz**2)
+            self.parlist.extend(['Dx', 'Dy', 'Dz'])
+            self.derivS = self._derivS3
+            self.stimCoord = [0,0,0,0,0,0]
+            self.stimCoord2 = [0,0,0,0,0,0]
         elif Nx*Ny: #2D
-            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
-            self.Ny=Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
-            self.Y=numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,1))
+            self.Nx = Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Ny = Ny+borders[2]*self.Padding/2+borders[3]*self.Padding/2
+            self.Y = numpy.tile(numpy.array(Y0),(self.Nx,self.Ny,1))
             #mask for padding borders    
-            self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
-            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2,
-                      borders[2]*self.Padding/2:self.Ny-borders[3]*self.Padding/2
-                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
-                                    self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2))
+            self.mask = 1e-4*numpy.ones(self.Y.shape[0:-1])
+            self.mask[borders[0]*self.Padding/2:
+                self.Nx-borders[1]*self.Padding/2,borders[2]*self.Padding/2:
+                self.Ny-borders[3]*self.Padding/2] = numpy.ones(
+                (self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2,
+                self.Ny-borders[2]*self.Padding/2-borders[3]*self.Padding/2)
+                )
             #diffusion coeffs
-            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
-            self.Dy=1/(self._Ray*self._Cm*self._hy**2)
+            self.Dx = 1/(self._Rax*self._Cm*self._hx**2)
+            self.Dy = 1/(self._Ray*self._Cm*self._hy**2)
             self.parlist.extend(['Dx','Dy'])
-            self.derivS=self._derivS2
-            self.stimCoord=[0,0,0,0]
-            self.stimCoord2=[0,0,0,0]
+            self.derivS = self._derivS2
+            self.stimCoord = [0,0,0,0]
+            self.stimCoord2 = [0,0,0,0]
         elif Nx>1: #1D
-            self.Nx=Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
-            self.Y=numpy.tile(numpy.array(Y0),(self.Nx,1))
+            self.Nx = Nx+borders[0]*self.Padding/2+borders[1]*self.Padding/2
+            self.Y = numpy.tile(numpy.array(Y0),(self.Nx,1))
             #mask for padding borders    
-            self.mask=1e-4*numpy.ones(self.Y.shape[0:-1])
-            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*self.Padding/2
-                      ]=numpy.ones((self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2))  
+            self.mask = 1e-4*numpy.ones(self.Y.shape[0:-1])
+            self.mask[borders[0]*self.Padding/2:self.Nx-borders[1]*
+                self.Padding/2] = numpy.ones(
+                (self.Nx-borders[0]*self.Padding/2-borders[1]*self.Padding/2)
+                )  
             #diffusion coeffs
-            self.Dx=1/(self._Rax*self._Cm*self._hx**2)
+            self.Dx = 1/(self._Rax*self._Cm*self._hx**2)
             self.parlist.append('Dx')
-            self.derivS=self._derivS1   
-            self.stimCoord=[0,0]
-            self.stimCoord2=[0,0]                        
+            self.derivS = self._derivS1   
+            self.stimCoord = [0,0]
+            self.stimCoord2 = [0,0]                        
         else: #0D
-            self.Y=numpy.array(Y0)
-            self.derivS=self._derivS0
-            self.stimCoord=[0,0]
-            self.stimCoord2=[0,0]
-        self.R=8.314
-        self.T=295
-        self.F=96.487
-        self.Ca0=3*numpy.ones(self.Y.shape[0:-1])
-        self.Istim=numpy.zeros(self.Y.shape[0:-1])
+            self.Y = numpy.array(Y0)
+            self.derivS = self._derivS0
+            self.stimCoord = [0,0]
+            self.stimCoord2 = [0,0]
+        self.R = 8.314
+        self.T = 295
+        self.F = 96.487
+        self.Ca0 = 3*numpy.ones(self.Y.shape[0:-1])
+        self.Istim = numpy.zeros(self.Y.shape[0:-1])
         self.masktempo = 1 
-        self.parlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy','_hz','masktempo'])
+        self.parlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy',
+                                                            '_hz','masktempo'])
         #option for noisy initial state
-        if noise!=0.0:
-            self.Y*=1+(numpy.random.random(self.Y.shape)-.5)*noise 
+        if noise != 0.0:
+            self.Y *= 1+(numpy.random.random(self.Y.shape)-.5)*noise 
 
     def reset(self):
         """set Y and time parameters to original value"""
-        self.time=0
-        if self.dim==3:
-            Y0=[-50,0.079257,0.001]
-        elif self.dim==6:
-            Y0=[-50,0.0015709,0.8,0.8,0.079257,0.001]
+        self.time = 0
+        if self.dim == 3:
+            Y0 = [-50,0.079257,0.001]
+        elif self.dim == 6:
+            Y0 = [-50,0.0015709,0.8,0.8,0.079257,0.001]
         else:
-            Y0=numpy.zeros(self.dim)
+            Y0 = numpy.zeros(self.dim)
         shp = list(self.Y.shape)
         shp[-1] = 1
-        self.Y=numpy.tile(numpy.array(Y0),shp)
+        self.Y = numpy.tile(numpy.array(Y0),shp)
 
     def copyparams(self,mdl):
         """Retrieves parameters from 'mdl', if it has the same class as self."""
@@ -247,7 +253,7 @@ class TissueModel(object):
     def __repr__(self):
         """Print model infos."""
         return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
-    def _derivative2(self,inumpyut, axis, output=None, mode="reflect", cval=0.0):
+    def _derivative2(self,inumpyut,axis,output=None, mode="reflect",cval=0.0):
         """Computes spatial derivative to get propagation."""
         return correlate1d(inumpyut, [1, -2, 1], axis, output, mode, cval, 0)
     def diff1d(self,Var):
@@ -261,8 +267,10 @@ class TissueModel(object):
         """Computes spatial derivative to get propagation."""
         Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
         if self.flag:
-            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3]]=0
-            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3]]=0
+            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:
+                                                            self.stimCoord[3]]=0
+            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:
+                                                           self.stimCoord2[3]]=0
         return Dif*self.mask
     def diff3d(self,Var):
         """Computes spatial derivative to get propagation."""
@@ -271,8 +279,10 @@ class TissueModel(object):
         derivz = self.Dz * self._derivative2(Var,2)
         Dif = derivx + derivy + derivz
         if self.flag:
-            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
-            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
+            Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:
+                        self.stimCoord[3],self.stimCoord[4]:self.stimCoord[5]]=0
+            Dif[self.stimCoord2[0]:self.stimCoord2[1],self.stimCoord2[2]:
+                    self.stimCoord2[3],self.stimCoord2[4]:self.stimCoord2[5]]=0
         return Dif*self.mask    
     def _derivS0(self):
         """Computes spatial derivative to get propagation. (0D)"""
@@ -287,9 +297,11 @@ class TissueModel(object):
         """Computes spatial derivative to get propagation. (3D)"""
         self.dY[...,0]+=self.diff3d(self.Y[...,0])    
     def plotstate(self):
-        """Plot state of the model with the suitable method, according its dimensions."""
+        """Plot state of the model with the suitable method, according its 
+            dimensions."""
         if self.Y.ndim==1:
-            print "State: Vm={0} mV, nK={1} and [Ca]={2} mmol.".format(self.Y[0],self.Y[1],self.Y[2])
+            print "State: Vm={0} mV, nK={1} and [Ca]={2} mmol.".format(
+                                                self.Y[0],self.Y[1],self.Y[2])
         elif self.Y.ndim==2:
             #pylab.figure()
             pylab.plot(self.Y)
@@ -317,9 +329,11 @@ class TissueModel(object):
 
 class Red3(TissueModel):
     """Cellular and tissular model Red3"""
-    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
+    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,
+                        borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.parlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2','vca2','Rca','Jbase','Name']
+        self.parlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2',
+                                                    'vca2','Rca','Jbase','Name']
         #Generic elements
         TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -341,7 +355,7 @@ class Red3(TissueModel):
         #self.Istim[5:20,5]=0.2
         
 
-    def derivT(self,dt,mp=False):
+    def derivT(self,dt,MP=False):
         """Computes temporal derivative for red3 model."""
         #Variables
         Vm=self.Y[...,0]
@@ -354,7 +368,8 @@ class Red3(TissueModel):
         #Tau x
         tnk=23.75*numpy.exp(-Vm/72.15)
         #Courants
-        Ica2=self.Jbase-self.Gca2*(Vm-Eca)/(1+numpy.exp(-(Vm-self.vca2)/self.Rca))
+        Ica2=self.Jbase-self.Gca2*(Vm-Eca)/                                    \
+            (1+numpy.exp(-(Vm-self.vca2)/self.Rca))
         Ik=self.Gk*nk*(Vm-self.Ek)
         Ikca=self.Gkca*Ca**2/(Ca**2+self.Kd**2)*(Vm-self.Ek)
         Il=self.Gl*(Vm-self.El)        
@@ -366,14 +381,16 @@ class Red3(TissueModel):
         #update Y
         self.derivS()
         # if the integrator uses shared memory, we don't allocate Y here
-        if not(mp):    
+        if not(MP):    
             self.Y+=self.dY*dt
 
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
-    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,borders=[True,True,True,True,True,True]):
+    def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,
+                borders=[True,True,True,True,True,True]):
         """Model init."""
-        self.parlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Name']
+        self.parlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek',
+                                                                        'Name']
         #Generic elements
         TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
         #Default Parameters
@@ -392,7 +409,7 @@ class Red6(TissueModel):
         #self.Istim[5:20,5]=0.2
         
 
-    def derivT(self,dt,mp=False):
+    def derivT(self,dt,MP=False):
         """Computes temporal derivative for red3 model."""
         #Variables
         Vm=self.Y[...,0]
@@ -414,7 +431,8 @@ class Red6(TissueModel):
         tmca=0.64*numpy.exp(-0.04*Vm)+1.188
         th1ca=160*numpy.ones(Vm.shape)
         Imodif=numpy.nonzero((Vm<-10)|(Vm>45))
-        th1ca[Imodif]=24.65*numpy.exp(-0.07281*Vm[Imodif])+17.64*numpy.exp(0.029*Vm[Imodif])
+        th1ca[Imodif]=24.65*numpy.exp(-0.07281*Vm[Imodif])+                    \
+                                            17.64*numpy.exp(0.029*Vm[Imodif])
         th2ca=160
         tnk=23.75*numpy.exp(-Vm/72.15)
        
@@ -438,166 +456,166 @@ class Red6(TissueModel):
         #update Y
         self.dY *= self.masktempo
         self.derivS()
-        if not(mp):
+        if not(MP):
             self.Y+=self.dY*dt
 
 def profilepara(*args):
-    import cProfile
-    import multiprocessing as mp
-    name = mp.current_process().name
+    """Function calling the engine process function and profiling it"""
+    from cProfile import runctx
     rank = args[0]
-    cProfile.runctx("parallelcomp(*args)", globals(), locals(), filename=('Process-'+str(rank)+'.prof'))    
+    runctx("parallelcomp(*args)", globals(), locals(), 
+                                        filename=('Process-'+str(rank)+'.prof'))
 
-def parallelcomp(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,dt,Y,mask,count,Vm,time,mutex,att,parti):
-     """Function used by the engine processes"""
-     import cell_mdl
-     import numpy
-     try:
-         from progressbar import Bar,ProgressBar,Percentage
-         showbar=True
-     except:
-         showbar=False
+def parallelcomp(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
+                                    dt,Y,mask,count,Vm,time,mutex,att):
+    """Function used by the engine processes"""
 
-     def findlimitsx(rank,nbx,Nx):
-         newNxx = round( (Nx + (nbx-1) * 2) / nbx )
-         x = [0,0]
-         if (rank%nbx==0):
-             x = [0,newNxx]
-         elif rank%nbx==(nbx-1):
-             x = [rank%nbx * newNxx - rank%nbx * 2,Nx]
-             newNxx = x[1] - x[0]
-         else:
-             x[0] = rank%nbx * newNxx - rank%nbx * 2
-             x[1] = x[0] + newNxx
-         return x,newNxx
+    try:
+        from progressbar import Bar,ProgressBar,Percentage
+        showbar=True
+    except ImportError:
+        showbar=False
+
+    def findlimitsx(rank,nbx,Nx):
+        newNxx = round( (Nx + (nbx-1) * 2) / nbx )
+        x = [0,0]
+        if (rank%nbx==0):
+            x = [0,newNxx]
+        elif rank%nbx==(nbx-1):
+            x = [rank%nbx * newNxx - rank%nbx * 2,Nx]
+            newNxx = x[1] - x[0]
+        else:
+            x[0] = rank%nbx * newNxx - rank%nbx * 2
+            x[1] = x[0] + newNxx
+        return x,newNxx
 
 #     Which rows should I compute?
-     [x,newNx] = findlimitsx(rank,N,Nx)
-
+    [x,newNx] = findlimitsx(rank,N,Nx)
 
 #     Stimulation (global coordinates)
-     xyIstim1 = stimCoord 
-     xyIstim2 = stimCoord2
-
+    xyIstim1 = stimCoord 
+    xyIstim2 = stimCoord2
 
 #     computing the local coordinates
-     if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
-         xyIstim1[0:2] = [-1,-1]
-     else:
-         xyIstim1[0:2] = [max(xyIstim1[0],x[0])-x[0],min(xyIstim1[1],x[-1])-x[0]]
+    if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
+        xyIstim1[0:2] = [-1,-1]
+    else:
+        xyIstim1[0:2] = [max(xyIstim1[0],x[0])-x[0],
+                           min(xyIstim1[1],x[-1])-x[0]]
 
-     if (xyIstim2[0] > x[-1]) or (xyIstim2[1] < x[0]):
-         xyIstim2[0:2] = [-1,-1]
-     else:
-         xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],min(xyIstim2[1],x[-1])-x[0]]
+    if (xyIstim2[0] > x[-1]) or (xyIstim2[1] < x[0]):
+        xyIstim2[0:2] = [-1,-1]
+    else:
+        xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],
+                           min(xyIstim2[1],x[-1])-x[0]]
 
 #     Creation of the model (one for each process)
-     bdrs=[False] * (2 + bool(Ny)*2 + bool(Nz)*2)
-     if listparam['Name'] == 'Red6':
-         mdl=cell_mdl.Red6(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
-     elif listparam['Name'] == 'Red3':
-         mdl=cell_mdl.Red3(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
-     mdl.setlistparams(listparam)
-     mdl.Name += 'p'
+    bdrs=[False] * (2 + bool(Ny)*2 + bool(Nz)*2)
+    if listparam['Name'] == 'Red6':
+        mdl = Red6(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
+    elif listparam['Name'] == 'Red3':
+        mdl = Red3(Nx=newNx,Ny=Ny,Nz=Nz,borders=bdrs)
+    mdl.setlistparams(listparam)
+    mdl.Name += 'p'
 
-     mdl.Y = Y[x[0]:x[1],...]
-     mdl.mask = mask[x[0]:x[1],...]
+    mdl.Y = Y[x[0]:x[1],...]
+    mdl.mask = mask[x[0]:x[1],...]
 
-     if rank == 0:
+    if rank == 0:
         mdl.mask[-1,...] = 0
-     if rank == N - 1:
+    if rank == N - 1:
         mdl.mask[0,...] = 0
         
 
-     def modify(var,x):
-         if not(isinstance(var,int)) and not(isinstance(var,float)):
-             return var[x[0]:x[1],...]
-         else:
-             return var
+    def modify(var,x):
+        if not(isinstance(var,int)) and not(isinstance(var,float)):
+            return var[x[0]:x[1],...]
+        else:
+            return var
 
-     mdl.masktempo = modify(mdl.masktempo,x)
-     mdl.hx = modify(mdl.hx,x)
-     mdl.hy = modify(mdl.hy,x)
-     mdl.hz = modify(mdl.hz,x)
-     mdl.Rax = modify(mdl.Rax,x)
-     mdl.Ray = modify(mdl.Ray,x)
-     mdl.Raz = modify(mdl.Raz,x)
+    mdl.masktempo = modify(mdl.masktempo,x)
+    mdl.hx = modify(mdl.hx,x)
+    mdl.hy = modify(mdl.hy,x)
+    mdl.hz = modify(mdl.hz,x)
+    mdl.Rax = modify(mdl.Rax,x)
+    mdl.Ray = modify(mdl.Ray,x)
+    mdl.Raz = modify(mdl.Raz,x)
 
 #     Tells the model where the stimuli are
-     if xyIstim1[0] != -1:
-         mdl.stimCoord = xyIstim1
-     if xyIstim2[0] != -1:
-         mdl.stimCoord2 = xyIstim2
+    if xyIstim1[0] != -1:
+        mdl.stimCoord = xyIstim1
+    if xyIstim2[0] != -1:
+        mdl.stimCoord2 = xyIstim2
 
-     def _stim1(mdl,stimCoord,Ist):
-         if stimCoord[0] != -1:
-             mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
+    def _stim1(mdl,stimCoord,Ist):
+        if stimCoord[0] != -1:
+            mdl.Istim[stimCoord[0]:stimCoord[1]]=Ist
 
-     def _stim2(mdl,stimCoord,Ist):
-         if stimCoord[0] != -1 and stimCoord[2] != -1:
-             mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
+    def _stim2(mdl,stimCoord,Ist):
+        if stimCoord[0] != -1 and stimCoord[2] != -1:
+            mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
 
-     def _stim3(mdl,stimCoord,Ist):
-         if stimCoord[0] != -1 and stimCoord[2] != -1:
-             mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
+    def _stim3(mdl,stimCoord,Ist):
+        if stimCoord[0] != -1 and stimCoord[2] != -1:
+            mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],
+                                       stimCoord[4]:stimCoord[5]]=Ist
 
-     decim=20
-     NbIter=0
-     Ft = 0.15
+    decim=20
+    NbIter=0
+#    Ft = 0.15
 
-#     time=numpy.zeros(round(tmax/(dt*decim))+1)
-
-     if Nx*Ny*Nz:
-         stim = _stim3
-     elif Nx*Ny:
-         stim = _stim2
-     elif Nx:
-         stim = _stim1
+    if Nx*Ny*Nz:
+        stim = _stim3
+    elif Nx*Ny:
+        stim = _stim2
+    elif Nx:
+        stim = _stim1
     
-     test = [rank != 0,rank != N-1]
-     if (rank==0) and showbar:
-         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(time)).start()
+    test = [rank != 0,rank != N-1]
+    if (rank==0) and showbar:
+        pbar = ProgressBar(widgets=[Percentage(), Bar()],
+                            maxval=len(time)).start()
 
-     lx,ly = mdl.dY.shape[:2]
-#     decim2 = 10
+    lx = mdl.dY.shape[0]
 
-     mdl.flag = True
+    mdl.flag = True
 
-     while (mdl.time<tmax):
-         Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
+    while (mdl.time<tmax):
+        Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(2*tmax)))+1)*   \
+                   numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
 
-         if mdl.flag and (mdl.time != 0) and (Ist == 0):
+        if mdl.flag and (mdl.time != 0) and (Ist == 0):
             mdl.flag = False
 
-         stim(mdl,xyIstim1,Ist)
-         stim(mdl,xyIstim2,Ist)
+        stim(mdl,xyIstim1,Ist)
+        stim(mdl,xyIstim2,Ist)
 
-         mdl.derivT(dt,True)
+        mdl.derivT(dt,True)
 
-         if (not round(mdl.time/dt)%decim):
-             mutex.acquire(timeout=2)
-             count.value += 1
-             if count.value == N:
+        if (not round(mdl.time/dt)%decim):
+            mutex.acquire(timeout=2)
+            count.value += 1
+            if count.value == N:
                 for i in range(N-1):
                     att.release()
                 count.value = 0
                 mutex.release()
-             else:
+            else:
                 mutex.release()
                 att.acquire(timeout=2)
 
-         Y[x[0]+test[0]:x[1]-test[1],...] += mdl.dY[0+test[0]:lx-test[1],...] * dt
+        Y[x[0]+test[0]:x[1]-test[1],...] += mdl.dY[0+test[0]:lx-test[1],...]*dt
 
-         mdl.time +=dt
+        mdl.time +=dt
         
-         if (rank == 0) and (not round(mdl.time/dt)%decim):
-             NbIter+=1
-             time[NbIter]=mdl.time
-             Vm[...,NbIter] = Y[...,0]           
-             if showbar:
+        if (rank == 0) and (not round(mdl.time/dt)%decim):
+            NbIter+=1
+            time[NbIter]=mdl.time
+            Vm[...,NbIter] = Y[...,0]           
+            if showbar:
                 pbar.update(mdl.time)
 
-     if (rank == 0) and showbar:    
+    if (rank == 0) and showbar:    
         pbar.finish()
 
 
@@ -663,20 +681,21 @@ class IntGen():
 
     def show(self):
         """show Vm in a graph. Works for 1D projects only"""
-        assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
+        assert 'Vm' in self.__dict__,"""We could not find the attribute Vm. 
+                            Have you tried running "compute" method before?"""
 
         if self.Vm.ndim == 2:
-            assert hasmatplot, "Sorry, you have to have pylab and matplot installed!"
+            assert HASMATPLOT, "Sorry, you have to have pylab installed!"
             pylab.imshow(self.Vm,aspect='auto',cmap=cm.jet)
             pylab.show()
         elif self.Vm.ndim == 3:
-            assert hasmayavi, "Sorry, you have to have mayavi installed!"
+            assert HASMAYAVI, "Sorry, you have to have mayavi installed!"
             s = mlab.surf(self.Vm[...,1])
             raw_input("Press Enter to lauch the simulation...")
             for i in range(1,self.Vm.shape[-1]):
                 s.mlab_source.scalars = self.Vm[...,i]
         elif self.Vm.ndim == 4:
-            assert hasmayavi, "Sorry, you have to have mayavi installed!"
+            assert HASMAYAVI, "Sorry, you have to have mayavi installed!"
             p = mlab.pipeline.scalar_field(self.Vm[...,1])
             s = mlab.pipeline.image_plane_widget( p,
                                         plane_orientation='x_axes',
@@ -697,7 +716,8 @@ class IntGen():
                                         vmin = self.Vm[...,1:].min(),
                                         vmax = self.Vm[...,1:].max()
                                     )
-            mlab.scalarbar(s,orientation='vertical',nb_labels=4,label_fmt='%.3f')
+            mlab.scalarbar(s,orientation='vertical',nb_labels=4,
+                                                            label_fmt='%.3f')
             mlab.outline(color=(1,1,1))
             raw_input("Press Enter to lauch the simulation...")
             for i in range(1,self.Vm.shape[-1]):
@@ -705,7 +725,8 @@ class IntGen():
 
     def speed(self,coord1,coord2,fshow=False):
         """calculate the mean spead between two points"""
-        assert 'Vm' in self.__dict__,'We could not find the attribute Vm. Have you tried running "compute" method before?'
+        assert 'Vm' in self.__dict__,"""We could not find the attribute Vm. 
+                            Have you tried running "compute" method before?"""
 
         if isinstance(coord1,list):
             coord1 = tuple(coord1)
@@ -719,7 +740,8 @@ class IntGen():
 
         i_delay = numpy.argmax(CrossCorrelation)
 
-        vectdelay = numpy.linspace(-self.t[-1]/2,self.t[-1]/2,len(CrossCorrelation))
+        vectdelay = numpy.linspace(-self.t[-1]/2,self.t[-1]/2,
+                                                        len(CrossCorrelation))
 
 
         delay = abs(vectdelay[i_delay]) * self.dt
@@ -727,7 +749,8 @@ class IntGen():
         if self.mdl.Y.ndim == 2:
             dist = abs(coord2 - coord1) * self.mdl.hx
         elif self.mdl.Y.ndim == 3:
-            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 )
+            dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
+                                (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 )
         elif self.mdl.Y.ndim == 4:
             dist = numpy.sqrt( (abs(coord2[0] - coord1[0]) * self.mdl.hx)**2 + \
             (abs(coord2[1] - coord1[1]) * self.mdl.hy)**2 + (abs(coord2[0] - \
@@ -763,7 +786,8 @@ class IntSerial(IntGen):
         self.mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
 
     def _stim3(self,stimCoord,Ist):
-        self.mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
+        self.mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],
+                                                stimCoord[4]:stimCoord[5]]=Ist
 
     def compute(self,tmax=500,stimCoord=-1,stimCoord2=-1):        
         """Compute.
@@ -801,16 +825,21 @@ class IntSerial(IntGen):
             self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,len(self.t)))
             self.stim = self._stim2
         elif self.mdl.Y.ndim == 4:
-            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,len(self.t)))
+            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,
+                                                                len(self.t)))
             self.stim = self._stim3
 
-        assert flag0D or ((self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2)),"stimCoord and/or stimCoord2 have incorrect dimensions"
+        assert flag0D or ( self.mdl.Y.ndim - 1 == len(stimCoord)/2 and \
+                self.mdl.Y.ndim - 1 == len(stimCoord2)/2 ),         \
+                "stimCoord and/or stimCoord2 have incorrect dimensions"
 
         self.mdl.flag = True
 
         #Integration
         while self.mdl.time<tmax:
-            Ist=self.Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax))
+            Ist = self.Iamp/2*(numpy.sign(numpy.sin(
+            2*numpy.pi*self.mdl.time/(2*tmax)
+            ) )+1)*numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax))
 
             if (self.mdl.time != 0) and (Ist == 0):
                 self.mdl.flag = False
@@ -820,7 +849,7 @@ class IntSerial(IntGen):
            # mdl.Istim[50:95,100]=Ist
             self.mdl.derivT(self.dt)
             #define new time step
-            self.dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft);
+            self.dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft)
             if self.dt > dtMax:
                 self.dt = dtMax
             if self.dt < dtMin:
@@ -878,15 +907,16 @@ class IntParaMP(IntGen):
         else:
             self.mdl.stimCoord2 = stimCoord2
 
-        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and \
+                (self.mdl.Y.ndim - 1 == len(stimCoord2)/2), \
+                "stimCoord and/or stimCoord2 have incorrect dimensions"
 
         self.dt=0.05
-        condi = mp.Condition()
         
         count = mp.Value('i',0)
         
         p = [0] * self.N
-        res =  [0] * self.N
+#        res =  [0] * self.N
 
         shp = list(self.mdl.Y.shape[:-1])
         shp.append(round(tmax/(self.dt*20))+1)
@@ -895,15 +925,20 @@ class IntParaMP(IntGen):
         self.t = shmarray.zeros(round(tmax/(self.dt*20))+1, numpy.float)
         s_mutex = mp.Semaphore(1)
         s_attente = mp.Semaphore(0)
-        s_parti = mp.Semaphore(0)
         
         print 'nombre de processus : ' + str(self.N)
 
         for n in range(self.N): 
             if profiling:
-                p[n] = mp.Process(target=cell_mdl.profilepara, args = (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,s_attente,s_parti))
+                p[n] = mp.Process(target=profilepara, args = 
+        (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),
+        self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,
+        s_attente))
             else:
-                p[n] = mp.Process(target=cell_mdl.parallelcomp, args = (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,s_attente,s_parti))
+                p[n] = mp.Process(target=parallelcomp, args = 
+        (n,tmax,Nx,Ny,Nz,self.N,stimCoord,stimCoord2,self.mdl.getlistparams(),
+        self.Iamp,self.dt,self.Y,self.mdl.mask,count,self.Vm,self.t,s_mutex,
+        s_attente))
             p[n].start()
 
         p[0].join()
@@ -917,7 +952,7 @@ class IntPara(IntGen):
         """The constructor.
                 mdl : model (of class Red3 or Red6)
         """
-        assert hasmpi, "mpi does not seem to be present in your system... sorry!"
+        assert HASMPI, "mpi does not seem to be present in your system.. sorry!"
         IntGen.__init__(self,mdl)
         #find the engine processes
         rc = Client(profile='mpi')
@@ -949,12 +984,11 @@ class IntPara(IntGen):
         """
 
 
-        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,Iamp,dt):
+        def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,
+                                                                    Iamp,dt):
 
             """Function used by the engine processes"""
             from mpi4py import MPI
-            import cell_mdl
-            import numpy
 
             def findlimitsx(rank,nbx,Nx):
                 newNxx = round( (Nx + (nbx-1) * 2) / (nbx) )
@@ -996,12 +1030,14 @@ class IntPara(IntGen):
             if (xyIstim1[0] > x[-1]) or (xyIstim1[1] < x[0]):
                 xyIstim1[0:2] = [-1,-1]
             else:
-                xyIstim1[0:2] = [max(xyIstim1[0],x[0])-x[0],min(xyIstim1[1],x[-1])-x[0]]
+                xyIstim1[0:2] = [max(xyIstim1[0],x[0])-x[0],
+                                min(xyIstim1[1],x[-1])-x[0]]
 
             if (xyIstim2[0] > x[-1]) or (xyIstim2[1] < x[0]):
                 xyIstim2[0:2] = [-1,-1]
             else:
-                xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],min(xyIstim2[1],x[-1])-x[0]]
+                xyIstim2[0:2] = [max(xyIstim2[0],x[0])-x[0],
+                                min(xyIstim2[1],x[-1])-x[0]]
 
             # What about the columns?
             if Ny:
@@ -1010,12 +1046,14 @@ class IntPara(IntGen):
                 if (xyIstim1[2] > y[-1]) or (xyIstim1[3] < y[0]):
                     xyIstim1[2:4] = [-1,-1]
                 else:
-                    xyIstim1[2:4] = [max(xyIstim1[2],y[0])-y[0],min(xyIstim1[3],y[-1])-y[0]]
+                    xyIstim1[2:4] = [max(xyIstim1[2],y[0])-y[0],
+                                    min(xyIstim1[3],y[-1])-y[0]]
 
                 if (xyIstim2[2] > y[-1]) or (xyIstim2[3] < y[0]):
                     xyIstim2[2:4] = [-1,-1]
                 else:
-                    xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],min(xyIstim2[3],y[-1])-y[0]]
+                    xyIstim2[2:4] = [max(xyIstim2[2],y[0])-y[0],
+                                    min(xyIstim2[3],y[-1])-y[0]]
                 
                 Ny2 = newNy-2*(rank/nbx==0)-2*(rank/nbx==(nby-1))
             else:  
@@ -1024,11 +1062,16 @@ class IntPara(IntGen):
             
 
             #Creation of the model (one for each process)
-            mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),(rank/nbx==(nby-1)),True,True]
+            mpi=[(rank%nbx==0),rank%nbx==(nbx-1),(rank/nbx==0),
+                (rank/nbx==(nby-1)),True,True]
             if listparam['Name'] == 'Red6':
-                mdl=cell_mdl.Red6(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi)
+                mdl=cell_mdl.Red6(
+        Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi
+                                 )
             elif listparam['Name'] == 'Red3':
-                mdl=cell_mdl.Red3(Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi)
+                mdl=cell_mdl.Red3(
+        Nx=newNx-2*(rank%nbx==0)-2*(rank%nbx==(nbx-1)),Ny=Ny2,Nz=Nz,borders=mpi
+                                 )
             mdl.setlistparams(listparam)
             mdl.Name += 'p'
 
@@ -1063,11 +1106,14 @@ class IntPara(IntGen):
 
             def _stim2(mdl,stimCoord,Ist):
                 if stimCoord[0] != -1 and stimCoord[2] != -1:
-                    mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3]]=Ist
+                    mdl.Istim[stimCoord[0]:stimCoord[1],
+                              stimCoord[2]:stimCoord[3]]=Ist
 
             def _stim3(mdl,stimCoord,Ist):
                 if stimCoord[0] != -1 and stimCoord[2] != -1:
-                    mdl.Istim[stimCoord[0]:stimCoord[1],stimCoord[2]:stimCoord[3],stimCoord[4]:stimCoord[5]]=Ist
+                    mdl.Istim[stimCoord[0]:stimCoord[1],
+                              stimCoord[2]:stimCoord[3],
+                              stimCoord[4]:stimCoord[5]]=Ist
 
             def _comm1(mdl,rank,test,nbx):
                 from mpi4py import MPI
@@ -1203,7 +1249,7 @@ class IntPara(IntGen):
 
             decim=20
             NbIter=0
-            Ft = 0.15
+#            Ft = 0.15
 
             time=numpy.zeros(round(tmax/(dt*decim))+1)
 
@@ -1211,12 +1257,14 @@ class IntPara(IntGen):
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,mdl.Nz,round(tmax/(dt*decim))+1))
                 stim = _stim3
                 comm = _comm3
-                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,rank/nbx != 0,rank/nbx != nby-1]
+                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,
+                        rank/nbx != 0,rank/nbx != nby-1]
             elif Nx*Ny:
                 Vm=numpy.zeros((mdl.Nx,mdl.Ny,round(tmax/(dt*decim))+1))
                 stim = _stim2
                 comm = _comm2
-                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,rank/nbx != 0,rank/nbx != nby-1]
+                test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1,
+                        rank/nbx != 0,rank/nbx != nby-1]
             elif Nx:
                 Vm=numpy.zeros((mdl.Nx,round(tmax/(dt*decim))+1))
                 stim = _stim1
@@ -1226,7 +1274,9 @@ class IntPara(IntGen):
             mdl.flag = True
 
             while (mdl.time<tmax):
-                Ist=Iamp/2*(numpy.sign(numpy.sin(2*numpy.pi*mdl.time/(2*tmax)))+1)*numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
+                Ist=Iamp/2*(numpy.sign(numpy.sin(
+                        2*numpy.pi*mdl.time/(2*tmax))
+                        )+1)*numpy.sin(2*numpy.pi*mdl.time/(2*tmax))
 
                 if (mdl.time != 0) and (Ist == 0):
                     mdl.flag = False
@@ -1267,11 +1317,14 @@ class IntPara(IntGen):
         else:
             self.mdl.stimCoord2 = stimCoord2
 
-        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and (self.mdl.Y.ndim - 1 == len(stimCoord2)/2),"stimCoord and/or stimCoord2 have incorrect dimensions"
+        assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and \
+                (self.mdl.Y.ndim - 1 == len(stimCoord2)/2), \
+                "stimCoord and/or stimCoord2 have incorrect dimensions"
 
 
         self.dt=0.05
-        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
+        res = self.view.apply_async(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,
+    self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
 
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
@@ -1287,17 +1340,19 @@ class IntPara(IntGen):
             comp = 0
             for item in seq:
                 if item == f: 
-	                return comp
+                    return comp
                 comp += 1
             return -1
 
-        v = tabResults[0]['Vm']
+#        v = tabResults[0]['Vm']
 
         # Aggregation of the results
         if Nx*Ny*Nz:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,Nz+self.mdl.Padding,len(self.t)))
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,
+                                            Nz+self.mdl.Padding,len(self.t)))
         elif Nx*Ny:
-            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,len(self.t)))
+            self.Vm = numpy.empty((Nx+self.mdl.Padding,Ny+self.mdl.Padding,
+                                                                len(self.t)))
         elif Nx:
             self.Vm = numpy.empty((Nx+self.mdl.Padding,len(self.t)))
 
@@ -1306,9 +1361,10 @@ class IntPara(IntGen):
             x = tabResults[i_client]['x']
             y = tabResults[i_client]['y']
             if y:
-                self.Vm[x[0]:x[1],y[0]:y[1],...]=numpy.array(tabResults[i_client]['Vm'])
+                self.Vm[x[0]:x[1],y[0]:y[1],...] = \
+                                        numpy.array(tabResults[i_client]['Vm'])
             else:
-                self.Vm[x[0]:x[1],:]=numpy.array(tabResults[i_client]['Vm'])
+                self.Vm[x[0]:x[1],:] = numpy.array(tabResults[i_client]['Vm'])
 
         self.t = self.t[...,1:]
         self.Vm = self.Vm[...,1:]

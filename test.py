@@ -4,7 +4,7 @@ import numpy as np
 import shmarray as sa
 reload(cell_mdl)
 import cProfile
-Nx,Ny,Nz = 50,50,5
+Nx,Ny,Nz = 50,50,0
 
 print "creation du modele"
 model = cell_mdl.Red3(Nx,Ny,Nz)
@@ -13,9 +13,9 @@ print "modele temporelle"
 tmdl = cell_mdl.IntParaMP(model)
 
 print 'calcul'
-tmdl.compute(1000,[2,10,2,10,2,3])
+tmdl.compute(5,[2,10,2,10])
 
-tmdl.save('test3D')
+#tmdl.save('test3D')
 
 #def truc(n,V):
 #    V[n,2] = n

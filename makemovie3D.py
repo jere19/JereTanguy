@@ -148,7 +148,8 @@ for i in range(int(tstep/round(max(t)/len(t))),len(t),int(tstep/round(max(t)/len
     if showbar:
         pbar.update(i)
 
-    
+
+del Y,t
 if showbar:    
     pbar.finish()
 # Now that we have graphed images of the dataset, we will stitch them
