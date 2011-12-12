@@ -7,13 +7,13 @@ import cProfile
 Nx,Ny,Nz = 50,50,0
 
 print "creation du modele"
-model = cell_mdl.Red3(Nx,Ny,Nz)
+model = cell_mdl.Red3(Nx,Ny,Nz, cylindrical=True)
 
 print "modele temporelle"
 tmdl = cell_mdl.IntParaMP(model)
 
 print 'calcul'
-tmdl.compute(5,[2,10,2,10])
+tmdl.compute(500,[2,10,2,10])
 
 tmdl.save('testlog')
 

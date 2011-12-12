@@ -35,7 +35,7 @@ import shmarray
 class TissueModel(object):
     """Generic cell and tissue model."""
     def __init__(self, dim, Nx, Ny=0, Nz=0, noise=0.0, 
-                borders=[True,True,True,True,True,True] ):
+                borders=[True,True,True,True,True,True], cylindrical=False):
         """Model init.
             dim: number of variables of state vector.
             Nx: number of cells along X.
@@ -47,6 +47,9 @@ class TissueModel(object):
         self.Name = "Generic!"
         self.Padding = 4
         self.time = 0
+        self.cyl = cylindrical
+        if self.cyl:
+            borders[2:5] = [False,False]
         #Initialise state given the type of model
         self.dim = dim
         if self.dim == 3:
@@ -136,7 +139,7 @@ class TissueModel(object):
         self.Istim = numpy.zeros(self.Y.shape[0:-1])
         self.masktempo = 1 
         self.parlist.extend(['R','T','F','_Cm','_Rax','_Ray','_Raz','_hx','_hy',
-                                                            '_hz','masktempo'])
+                                                       '_hz','masktempo','cyl'])
         #option for noisy initial state
         if noise != 0.0:
             self.Y *= 1+(numpy.random.random(self.Y.shape)-.5)*noise 
@@ -253,7 +256,7 @@ class TissueModel(object):
     def __repr__(self):
         """Print model infos."""
         return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
-    def _derivative2(self,inumpyut,axis,output=None, mode="reflect",cval=0.0):
+    def _derivative2(self,inumpyut,axis,output=None, mode="wrap",cval=0.0):
         """Computes spatial derivative to get propagation."""
         return correlate1d(inumpyut, [1, -2, 1], axis, output, mode, cval, 0)
     def diff1d(self,Var):
@@ -265,7 +268,8 @@ class TissueModel(object):
         return Dif*self.mask   
     def diff2d(self,Var):
         """Computes spatial derivative to get propagation."""
-        Dif=self.Dx*self._derivative2(Var,0)+self.Dy*self._derivative2(Var,1)
+        Dif=self.Dx*self._derivative2(Var,0) + self.Dy*self._derivative2(Var,1)
+            
         if self.flag:
             Dif[self.stimCoord[0]:self.stimCoord[1],self.stimCoord[2]:
                                                             self.stimCoord[3]]=0
@@ -330,12 +334,12 @@ class TissueModel(object):
 class Red3(TissueModel):
     """Cellular and tissular model Red3"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,
-                        borders=[True,True,True,True,True,True]):
+                     borders=[True,True,True,True,True,True],cylindrical=False):
         """Model init."""
         self.parlist=['Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek','Gca2',
                                                     'vca2','Rca','Jbase','Name']
         #Generic elements
-        TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders)
+        TissueModel.__init__(self,3,Nx,Ny,Nz,noise,borders,cylindrical)
         #Default Parameters
         self.Name="Red3"
         self.Gk=0.064
@@ -387,12 +391,12 @@ class Red3(TissueModel):
 class Red6(TissueModel):
     """Cellular and tissular model Red6"""
     def __init__(self,Nx,Ny=0,Nz=0,noise=0.0,
-                borders=[True,True,True,True,True,True]):
+                borders=[True,True,True,True,True,True],cylindrical=False):
         """Model init."""
         self.parlist=['Gca','Gk','Gkca','Gl','Kd','fc','alpha','Kca','El','Ek',
                                                                         'Name']
         #Generic elements
-        TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders)
+        TissueModel.__init__(self,6,Nx,Ny,Nz,noise,borders,cylindrical)
         #Default Parameters
         self.Name="Red6"
         self.Gca=0.09
@@ -984,6 +988,12 @@ class IntPara(IntGen):
         #Create a view of the processes
         self.view = rc[:]
 
+        def foo():
+            import cell_mdl
+            from mpi4py import MPI
+
+        self.view.apply_sync(foo)
+
         #number of clients
         nCl = len(rc.ids)
 
@@ -1007,11 +1017,11 @@ class IntPara(IntGen):
                 stimCoord,stimCoord2 : Coordinates of the stimulations
         """
 
-
         def parallelcomp(tmax,Nx,Ny,Nz,nbx,nby,stimCoord,stimCoord2,listparam,
                                                                     Iamp,dt):
+            """Function used by the engine processes"""            
+
             import cell_mdl
-            """Function used by the engine processes"""
             from mpi4py import MPI
 
             def findlimitsx(rank,nbx,Nx):
@@ -1296,6 +1306,8 @@ class IntPara(IntGen):
                 test = [rank%2,rank%nbx != 0,rank%nbx != nbx-1]
             
             mdl.flag = True
+            mdl.time = 0
+
 
             while (mdl.time<tmax):
                 Ist=Iamp/2*(numpy.sign(numpy.sin(
@@ -1341,6 +1353,7 @@ class IntPara(IntGen):
         else:
             self.mdl.stimCoord2 = stimCoord2
 
+
         assert (self.mdl.Y.ndim - 1 == len(stimCoord)/2) and \
                 (self.mdl.Y.ndim - 1 == len(stimCoord2)/2), \
                 "stimCoord and/or stimCoord2 have incorrect dimensions"
@@ -1352,6 +1365,10 @@ class IntPara(IntGen):
 
         self.view.wait(res)  #wait for the results
         tabResults = res.get()
+
+
+#        tabResults  = self.view.apply_sync(parallelcomp,tmax,Nx,Ny,Nz,self.nbx,
+#    self.nby,stimCoord,stimCoord2,self.mdl.getlistparams(),self.Iamp,self.dt)
 
         self.t = tabResults[0]['time']
 
