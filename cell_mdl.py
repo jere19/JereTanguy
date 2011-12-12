@@ -481,16 +481,18 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
         showbar=False
 
     def findlimitsx(rank,nbx,Nx):
-        newNxx = round( (Nx + (nbx-1) * 2) / nbx )
+        newNxx = round( float(Nx) / nbx )
         x = [0,0]
         if (rank%nbx==0):
-            x = [0,newNxx]
+            x = [0,newNxx+2]
         elif rank%nbx==(nbx-1):
-            x = [rank%nbx * newNxx - rank%nbx * 2,Nx]
+            x = [rank%nbx * (newNxx+2) - rank%nbx * 2,Nx]
             newNxx = x[1] - x[0]
         else:
-            x[0] = rank%nbx * newNxx - rank%nbx * 2
-            x[1] = x[0] + newNxx
+            x[0] = rank%nbx * (newNxx+2) - rank%nbx * 2
+            x[1] = x[0] + newNxx + 2
+
+        newNxx += 2
         return x,newNxx
 
 #     Which rows should I compute?
