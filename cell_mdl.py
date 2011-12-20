@@ -252,10 +252,16 @@ class TissueModel(object):
         for par in dictparam:
             self.__dict__[par]=dictparam[par]
 
+    def savedict(self):
+        d = self.__dict__.copy()
+        d['derivS'] = self.derivS.__repr__()
+        return d
+
     
     def __repr__(self):
         """Print model infos."""
-        return "Model {}, dimensions: {}.".format(self.Name,self.Y.shape)   
+        return "Model "+ self.Name +", dimensions: "+str(self.Y.shape)+" ."    
+
     def _derivative2(self,inumpyut,axis,output=None, mode="wrap",cval=0.0):
         """Computes spatial derivative to get propagation."""
         return correlate1d(inumpyut, [1, -2, 1], axis, output, mode, cval, 0)
@@ -480,21 +486,27 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
     except ImportError:
         showbar=False
 
+#    def findlimitsx(rank,nbx,Nx):
+#        from numpy import trunc
+#        newNxx = trunc( float(Nx) / nbx )
+#        x = [0,0]
+#        if rank%nbx==(nbx-1):
+#            x = [rank%nbx * (newNxx+2) - rank%nbx * 2,Nx]
+#        elif (rank%nbx==0):
+#            x = [0,newNxx+2]
+#        else:
+#            x[0] = rank%nbx * (newNxx+2) - rank%nbx * 2
+#            x[1] = x[0] + newNxx + 2
+#        return x,x[1] - x[0]
+
     def findlimitsx(rank,nbx,Nx):
-        newNxx = round( float(Nx) / nbx )
-        x = [0,0]
-        if (rank%nbx==0):
-            x = [0,newNxx+2]
-        elif rank%nbx==(nbx-1):
-            x = [rank%nbx * (newNxx+2) - rank%nbx * 2,Nx]
-            newNxx = x[1] - x[0]
-        else:
-            x[0] = rank%nbx * (newNxx+2) - rank%nbx * 2
-            x[1] = x[0] + newNxx + 2
-
-        newNxx += 2
-        return x,newNxx
-
+        from numpy import arange,array_split
+        tmp = arange(Nx+2*nbx-2+1)
+        tab = array_split(tmp,nbx)
+        l = len(tab[rank])
+        x = [ tab[rank][0] - rank*2 - int(rank != 0), tab[rank][-1] - rank*2]
+        return x,x[1]-x[0]
+        
 #     Which rows should I compute?
     [x,newNx] = findlimitsx(rank,N,Nx)
 
@@ -531,7 +543,11 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
         mdl.mask[-1,...] = 0
     if rank == N - 1:
         mdl.mask[0,...] = 0
-        
+    else:
+        mdl.masktempo[-2:,...] = 0
+    
+    mdl.masktempo = numpy.ones(mdl.dY.shape) + mdl.masktempo
+    
 
     def modify(var,x):
         if not(isinstance(var,int)) and not(isinstance(var,float)):
@@ -599,7 +615,8 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
         mdl.derivT(dt,True)
 
         if (not round(mdl.time/dt)%decim):
-            mutex.acquire(timeout=2)
+            if not mutex.acquire(timeout=2):
+                print('timeout mutex')
             count.value += 1
             if count.value == N:
                 for i in range(N-1):
@@ -608,7 +625,8 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
                 mutex.release()
             else:
                 mutex.release()
-                att.acquire(timeout=2)
+                if not att.acquire(timeout=2):
+                    print('timeout att')
 
         Y[x[0]+test[0]:x[1]-test[1],...] += mdl.dY[0+test[0]:lx-test[1],...]*dt
 
@@ -635,6 +653,19 @@ class IntGen():
         self.mdl = mdl
         self.Iamp=0.2
         
+    def savemodel(self,filename):
+        d = self.__dict__.copy()
+        d['mdl'] = self.mdl.__repr__()
+        try:
+            d['t'] = numpy.array(d['t'])
+            d['Y'] = numpy.array(d['Y'])
+            d['Vm'] = numpy.array(d['Vm'])
+        except KeyError:
+            pass
+        mdl = self.mdl.savedict()
+        numpy.savez(filename,tmdl=d,mdl=mdl)
+        print 'Modele saved in ' + filename
+
     def save(self,filename,limitsize=500,tmax=1000):
         """save t and Vm using the method numpy.savez"""
         count = 1
@@ -871,6 +902,7 @@ class IntSerial(IntGen):
             2*numpy.pi*self.mdl.time/(2*tmax)
             ) )+1)*numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax))
 
+
             if (self.mdl.time != 0) and (Ist == 0):
                 self.mdl.flag = False
 
@@ -879,11 +911,11 @@ class IntSerial(IntGen):
            # mdl.Istim[50:95,100]=Ist
             self.mdl.derivT(self.dt)
             #define new time step
-            self.dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft)
-            if self.dt > dtMax:
-                self.dt = dtMax
-            if self.dt < dtMin:
-                self.dt = dtMin
+#            self.dt = dtMin*dVmax/numpy.max(abs(self.mdl.dY[...,0].all())-Ft)
+#            if self.dt > dtMax:
+#                self.dt = dtMax
+#            if self.dt < dtMin:
+#                self.dt = dtMin
             self.mdl.time+=self.dt
             #stores time and state 
             if not round(self.mdl.time/self.dt)%self.decim:
@@ -911,7 +943,11 @@ class IntParaMP(IntGen):
         if N is None:
             self.N = mp.cpu_count()
         else:
-            self.N = N
+            if N > mp.cpu_count():
+                self.N = mp.cpu_count()
+                warn("The number of workers asked is higher than the number of available CPUs, I will only launch " + str(self.N) + 'workers')
+            else:
+                self.N = N
         # data,N = rearrange(_data,N)
 
         
@@ -973,7 +1009,6 @@ class IntParaMP(IntGen):
 
         p[0].join()
 
-        
 
 class IntPara(IntGen):
     """Integrator class using parallel computation"""

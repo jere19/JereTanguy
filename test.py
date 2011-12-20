@@ -7,15 +7,14 @@ import cProfile
 Nx,Ny,Nz = 50,50,0
 
 print "creation du modele"
-model = cell_mdl.Red3(Nx,Ny,Nz, cylindrical=True)
+model = cell_mdl.Red3(Nx,Ny,Nz)
 
 print "modele temporelle"
-tmdl = cell_mdl.IntParaMP(model)
-
+tmdl = cell_mdl.IntParaMP(model,1)
 print 'calcul'
-tmdl.compute(500,[2,10,2,10])
-
-tmdl.save('testlog')
+tmdl.compute(5,[10,20,2,10])
+    
+#tmdl.save('testlog')
 
 #def truc(n,V):
 #    V[n,2] = n
