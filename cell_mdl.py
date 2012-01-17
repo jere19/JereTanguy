@@ -543,10 +543,10 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
         mdl.mask[-1,...] = 0
     if rank == N - 1:
         mdl.mask[0,...] = 0
-    else:
-        mdl.masktempo[-2:,...] = 0
-    
-    mdl.masktempo = numpy.ones(mdl.dY.shape) + mdl.masktempo
+#    else:
+#        mdl.masktempo[-2:,...] = 0
+#    
+#    mdl.masktempo = numpy.ones(mdl.dY.shape[:-1]) + mdl.masktempo
     
 
     def modify(var,x):
@@ -643,6 +643,7 @@ def parallelcompMP(rank,tmax,Nx,Ny,Nz,N,stimCoord,stimCoord2,listparam,Iamp,
         pbar.finish()
 
 
+
 class IntGen():
     """Generic integrator class"""
 
@@ -664,7 +665,7 @@ class IntGen():
             pass
         mdl = self.mdl.savedict()
         numpy.savez(filename,tmdl=d,mdl=mdl)
-        print 'Modele saved in ' + filename
+        print 'Model saved in ' + filename
 
     def save(self,filename,limitsize=500,tmax=1000):
         """save t and Vm using the method numpy.savez"""
@@ -678,7 +679,7 @@ class IntGen():
             while toobig:
                 while t_tmp[-1] > tmax*count:
                     ind = t_tmp.searchsorted(tmax*count)
-                    if v_tmp[...,:ind] / (2**20) > limitsize:
+                    if v_tmp[...,:ind].nbytes / (2**20) > limitsize:
                         break
                     else:
                         toobig = False
@@ -691,7 +692,7 @@ class IntGen():
                     v_tmp = v_tmp[...,ind:]
                     count += 1
                 if len(t_tmp) > 0:
-                    if v_tmp / (2**20) > limitsize:
+                    if v_tmp.nbytes / (2**20) > limitsize:
                         break
                     else:
                         toobig = False
@@ -862,7 +863,11 @@ class IntSerial(IntGen):
         dtMin = self.dt
         dtMax = 6
         dVmax = 1
-        self.t=numpy.ones(round(tmax/(self.dt*self.decim))+1) * self.mdl.time
+
+        time = self.mdl.time
+
+#        self.t=numpy.ones(round(tmax/(self.dt*self.decim))+1) * self.mdl.time
+        self.t=shmarray.ones(round(tmax/(self.dt*self.decim))+1) * time
         
         if stimCoord == -1:
             stimCoord = self.mdl.stimCoord
@@ -874,20 +879,36 @@ class IntSerial(IntGen):
         else:
             self.mdl.stimCoord2 = stimCoord2
 
+#        flag0D = False
+#        if self.mdl.Y.ndim == 1:
+#            self.Vm = numpy.empty(len(self.t))
+#            self.stim = self._stim0
+#            flag0D = True
+#        elif self.mdl.Y.ndim == 2:
+#            self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
+#            self.stim = self._stim1
+#        elif self.mdl.Y.ndim == 3:
+#            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,len(self.t)))
+#            self.stim = self._stim2
+#        elif self.mdl.Y.ndim == 4:
+#            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,
+#                                                                len(self.t)))
+
         flag0D = False
         if self.mdl.Y.ndim == 1:
-            self.Vm = numpy.empty(len(self.t))
+            self.Vm = shmarray.zeros(len(self.t))
             self.stim = self._stim0
             flag0D = True
         elif self.mdl.Y.ndim == 2:
-            self.Vm = numpy.empty((self.mdl.Nx,len(self.t)))
+            self.Vm = shmarray.zeros((self.mdl.Nx,len(self.t)))
             self.stim = self._stim1
         elif self.mdl.Y.ndim == 3:
-            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,len(self.t)))
+            self.Vm = shmarray.zeros((self.mdl.Nx,self.mdl.Ny,len(self.t)))
             self.stim = self._stim2
         elif self.mdl.Y.ndim == 4:
-            self.Vm = numpy.empty((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,
+            self.Vm = shmarray.zeros((self.mdl.Nx,self.mdl.Ny,self.mdl.Nz,
                                                                 len(self.t)))
+
             self.stim = self._stim3
 
         assert flag0D or ( self.mdl.Y.ndim - 1 == len(stimCoord)/2 and \
@@ -896,14 +917,16 @@ class IntSerial(IntGen):
 
         self.mdl.flag = True
 
+
+        Iamp = self.Iamp
         #Integration
-        while self.mdl.time<tmax:
-            Ist = self.Iamp/2*(numpy.sign(numpy.sin(
-            2*numpy.pi*self.mdl.time/(2*tmax)
-            ) )+1)*numpy.sin(2*numpy.pi*self.mdl.time/(2*tmax))
+        while time<tmax:
+            Ist = Iamp/2*(numpy.sign(numpy.sin(
+            2*numpy.pi*time/(2*tmax)
+            ) )+1)*numpy.sin(2*numpy.pi*time/(2*tmax))
 
 
-            if (self.mdl.time != 0) and (Ist == 0):
+            if (time != 0) and (Ist == 0):
                 self.mdl.flag = False
 
             self.stim(stimCoord,Ist)
@@ -916,11 +939,11 @@ class IntSerial(IntGen):
 #                self.dt = dtMax
 #            if self.dt < dtMin:
 #                self.dt = dtMin
-            self.mdl.time+=self.dt
+            time+=self.dt
             #stores time and state 
-            if not round(self.mdl.time/self.dt)%self.decim:
+            if not round(time/self.dt)%self.decim:
                 NbIter+=1
-                self.t[NbIter]=self.mdl.time
+                self.t[NbIter]=time
                 self.Vm[...,NbIter]=self.mdl.Y[...,0].copy()
         self.Vm = self.Vm[...,1:NbIter-1]
         self.t = self.t[...,1:NbIter-1]
